@@ -351,6 +351,182 @@ def explain_single_tie_rejections(block_amps):
 
 
 # ---------------------------------------------------------------------------
+# 6. NETWORK DIAGRAM (ADMS-STYLE ONE-LINE VIEW)
+# ---------------------------------------------------------------------------
+def draw_network(sol=None, block_amps=None):
+    """
+    Render an ADMS-style one-line diagram of the distribution network.
+
+    sol        : result dict from solve_offload(); when None shows the
+                 initial outage state (X feeders dead, ties open).
+    block_amps : block-name -> amps; annotates each load block when given.
+    """
+    try:
+        import matplotlib.pyplot as plt
+        import matplotlib.patches as mpatches
+        import matplotlib.lines as mlines
+        from matplotlib.patches import FancyArrowPatch
+    except ImportError:
+        raise ImportError(
+            "matplotlib is required for draw_network(). pip install matplotlib"
+        )
+
+    # Manual positions: healthy feeders left, outaged feeders right.
+    POS = {
+        "SUB-A": (1.0, 5.5), "SUB-B": (5.5, 5.5), "SUB-X":  (9.5, 5.5),
+        "A1-a":  (1.0, 4.2), "A1-b":  (1.0, 3.0),
+        "B1-a":  (4.5, 4.2), "B2-a":  (6.5, 4.2),
+        "X1-A":  (8.5, 4.2), "X1-B":  (8.5, 3.0), "X1-C":  (8.5, 1.8),
+        "X2-A": (10.5, 4.2), "X2-B": (10.5, 3.0),
+    }
+    FEEDER_COLORS = {
+        "A1": "#1a78c2", "B1": "#27ae60", "B2": "#16a2b8",
+        "X1": "#e07b00", "X2": "#cc3333",
+    }
+    BG = "#151525"
+
+    # Derive switch / energization states.
+    if sol is not None:
+        xstate = sol["x"]
+        ystate = sol["y"]
+    else:
+        xstate = {e: ed["closed"] for e, ed in EDGES.items()}
+        outage_cbs = {e for e, ed in EDGES.items() if ed["u"] == OUTAGE_SUBSTATION}
+        outage_feeders = {
+            NODES[ed["v"]]["feeder"] for e, ed in EDGES.items()
+            if e in outage_cbs and NODES[ed["v"]]["kind"] == "block"
+        }
+        ystate = {
+            n: 0 if (n == OUTAGE_SUBSTATION or
+                     (NODES[n]["kind"] == "block" and
+                      NODES[n]["feeder"] in outage_feeders))
+            else 1
+            for n in NODES
+        }
+
+    # ── Canvas ──────────────────────────────────────────────────────────────
+    fig, ax = plt.subplots(figsize=(16, 9))
+    ax.set_xlim(-0.3, 12.5)
+    ax.set_ylim(0.8, 7.0)
+    ax.set_aspect("equal")
+    ax.axis("off")
+    fig.patch.set_facecolor(BG)
+    ax.set_facecolor(BG)
+
+    # ── Edges ───────────────────────────────────────────────────────────────
+    for eid, ed in EDGES.items():
+        x0, y0 = POS[ed["u"]]
+        x1, y1 = POS[ed["v"]]
+        is_closed = bool(xstate[eid])
+        feeder = NODES[ed["u"]].get("feeder") or NODES[ed["v"]].get("feeder")
+        line_color = FEEDER_COLORS.get(feeder, "#aaaaaa") if is_closed else "#445566"
+        lw = 3.0 if ed["kind"] in ("cb", "cable") else 2.2
+        mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+
+        if ed["kind"] == "tie":
+            # Arc outward so long ties clear the main feeder lines.
+            rad = 0.2 if abs(y1 - y0) > 0.3 else 0.0
+            ax.add_patch(FancyArrowPatch(
+                (x0, y0), (x1, y1), arrowstyle="-",
+                color=line_color, linewidth=lw, linestyle="dashed",
+                connectionstyle=f"arc3,rad={rad}", zorder=2,
+            ))
+        else:
+            ax.plot([x0, x1], [y0, y1],
+                    color=line_color, lw=lw, solid_capstyle="round", zorder=2)
+
+        # Switch symbol: filled circle = closed, circled-X = open.
+        if ed["switchable"]:
+            sym_color = "#dddddd" if is_closed else "#ff6b6b"
+            r = 0.13
+            ax.add_patch(plt.Circle(
+                (mx, my), r, facecolor=BG, edgecolor=sym_color, lw=2.5, zorder=5
+            ))
+            if is_closed:
+                ax.add_patch(plt.Circle((mx, my), r * 0.4, color=sym_color, zorder=6))
+            else:
+                r2 = r * 0.55
+                ax.plot([mx - r2, mx + r2], [my - r2, my + r2],
+                        color=sym_color, lw=1.8, zorder=6)
+                ax.plot([mx - r2, mx + r2], [my + r2, my - r2],
+                        color=sym_color, lw=1.8, zorder=6)
+
+        # Edge label, offset perpendicular to the line.
+        dx, dy = x1 - x0, y1 - y0
+        L = np.hypot(dx, dy)
+        ox, oy = (-dy / L * 0.27, dx / L * 0.27) if L > 1e-9 else (0.25, 0)
+        ax.text(mx + ox, my + oy, eid,
+                fontsize=6.5, ha="center", va="center", color="#bbbbcc",
+                bbox=dict(boxstyle="round,pad=0.1", facecolor=BG,
+                          edgecolor="none", alpha=0.65),
+                zorder=7)
+
+    # ── Nodes ────────────────────────────────────────────────────────────────
+    for nid, nd in NODES.items():
+        x, y = POS[nid]
+        energized = bool(ystate.get(nid, 1))
+
+        if nd["kind"] == "bus":
+            fc = "#c0392b" if nid == OUTAGE_SUBSTATION else "#2471a3"
+            if not energized:
+                fc = "#3a3a4a"
+            ax.add_patch(mpatches.FancyBboxPatch(
+                (x - 0.52, y - 0.21), 1.04, 0.42,
+                boxstyle="round,pad=0.06",
+                facecolor=fc, edgecolor="#888899", lw=1.5, zorder=8,
+            ))
+            tag = " [OFF]" if not energized else ""
+            ax.text(x, y, nid + tag, ha="center", va="center",
+                    fontsize=8.5, fontweight="bold", color="white", zorder=9)
+        else:
+            fc = FEEDER_COLORS.get(nd["feeder"], "#666") if energized else "#2e2e3e"
+            ax.add_patch(plt.Circle(
+                (x, y), 0.34, facecolor=fc, edgecolor="#888899", lw=1.5, zorder=8
+            ))
+            ax.text(x, y + 0.08, nid, ha="center", va="center",
+                    fontsize=6.5, fontweight="bold",
+                    color="white" if energized else "#666677", zorder=9)
+            ax.text(x, y - 0.12, f"{nd['customers']}c", ha="center", va="center",
+                    fontsize=6, color="white" if energized else "#666677", zorder=9)
+            if block_amps and nid in block_amps:
+                ax.text(x + 0.42, y + 0.25, f"{block_amps[nid]:.0f} A",
+                        fontsize=6.5, color="#f0c040",
+                        ha="left", va="bottom", zorder=9)
+
+    # ── Legend ───────────────────────────────────────────────────────────────
+    leg_items = [
+        mpatches.Patch(facecolor="#2471a3", edgecolor="#888899",
+                       label="Healthy substation bus"),
+        mpatches.Patch(facecolor="#c0392b", edgecolor="#888899",
+                       label="Outaged substation (SUB-X)"),
+        *[mpatches.Patch(facecolor=c, label=f"Feeder {f}")
+          for f, c in FEEDER_COLORS.items()],
+        mlines.Line2D([0], [0], color="#888899", lw=2, ls="--",
+                      label="Tie switch (dashed)"),
+        mlines.Line2D([0], [0], color="w", marker="o", markerfacecolor=BG,
+                      markeredgecolor="#dddddd", markersize=12, markeredgewidth=2.5,
+                      label="Switch closed (●)"),
+        mlines.Line2D([0], [0], color="w", marker="o", markerfacecolor=BG,
+                      markeredgecolor="#ff6b6b", markersize=12, markeredgewidth=2.5,
+                      label="Switch open (×)"),
+    ]
+    leg = ax.legend(handles=leg_items, loc="lower right", fontsize=8,
+                    facecolor="#1e1e30", edgecolor="#444455", labelcolor="white",
+                    title="Legend", title_fontsize=8)
+    leg.get_title().set_color("#ccccdd")
+
+    mode = "Post-switching state" if sol else "Initial outage state"
+    ax.set_title(
+        f"Substation Outage Offload Planner  ·  {mode}",
+        fontsize=13, fontweight="bold", color="white", pad=14,
+    )
+
+    plt.tight_layout()
+    plt.show()
+    return fig, ax
+
+
+# ---------------------------------------------------------------------------
 # MAIN
 # ---------------------------------------------------------------------------
 def main(season="summer"):
@@ -425,6 +601,11 @@ def main(season="summer"):
     n_manual = len(opens) + len(closes) - n_remote
     print(f"\nSwitching effort: {len(opens)} open + {len(closes)} close "
           f"({n_remote} remote, {n_manual} manual)")
+
+    try:
+        draw_network(sol=sol, block_amps=block_amps)
+    except ImportError:
+        print("\n(Install matplotlib to view the network diagram: pip install matplotlib)")
 
 
 if __name__ == "__main__":

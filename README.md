@@ -13,6 +13,7 @@ This tool automates that process:
 3. **Allocates** feeder-head current down to individual switchable load blocks using transformer kVA weights, anchored by RTU readings where available
 4. **Solves a MILP** to maximize restored customers while penalizing switching actions and enforcing thermal and radiality constraints
 5. **Emits** an ordered switching plan with independent verification
+6. **Renders** an ADMS-style one-line network diagram showing switch states and load before and after restoration
 
 ## Usage
 
@@ -66,18 +67,49 @@ The MILP objective maximizes restored customers (weighted at 100 per customer) m
 - Radiality constraint (switched network must remain a spanning forest)
 - No substation paralleling
 
+## Network diagram
+
+Running the script automatically opens an ADMS-style one-line diagram of the post-switching state. You can also call `draw_network()` directly from Python:
+
+```python
+from offload_planner import draw_network, solve_offload, allocate_block_loads, ...
+
+# Initial outage state (X feeders dark, ties open)
+draw_network()
+
+# Post-switching restored state with load annotations
+draw_network(sol=sol, block_amps=block_amps)
+```
+
+The diagram uses a dark canvas with feeder color-coding:
+
+| Visual element | Meaning |
+|---|---|
+| Blue rectangle | Healthy substation bus |
+| Red rectangle | Outaged substation (SUB-X) |
+| Colored circles | Load blocks, shaded per feeder; label shows block name and customer count |
+| Gold annotation | Block load in amps (shown when `block_amps` is provided) |
+| Solid feeder-colored line | Energized, closed switch or cable |
+| Dark gray line | De-energized section |
+| Dashed arc | Tie switch (T1–T3), arced to avoid overlapping feeder lines |
+| ● (filled circle on line) | Switch closed |
+| × (circled cross on line) | Switch open |
+
+Requires `matplotlib` (optional — the solver and plan output work without it).
+
 ## Dependencies
 
 ```
 numpy
 networkx
 pulp
+matplotlib   # optional, for draw_network()
 ```
 
 Install with:
 
 ```bash
-pip install numpy networkx pulp
+pip install numpy networkx pulp matplotlib
 ```
 
 PuLP ships with the CBC solver, so no external solver installation is required.
