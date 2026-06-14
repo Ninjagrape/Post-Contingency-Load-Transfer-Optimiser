@@ -1,4 +1,4 @@
-# auto-post-contingency-offload
+# Post Contingency Load Transfer Optimiser
 
 A tool that automatically generates optimal switching sequences to restore power after a full substation outage, using mixed-integer linear programming (MILP).
 
