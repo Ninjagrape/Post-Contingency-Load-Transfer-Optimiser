@@ -355,37 +355,88 @@ def explain_single_tie_rejections(block_amps):
 # ---------------------------------------------------------------------------
 def draw_network(sol=None, block_amps=None):
     """
-    Render an ADMS-style one-line diagram of the distribution network.
+    Render an ADMS-style one-line diagram using strictly orthogonal routing.
 
     sol        : result dict from solve_offload(); when None shows the
                  initial outage state (X feeders dead, ties open).
     block_amps : block-name -> amps; annotates each load block when given.
+
+    All connections are horizontal or vertical only.  Where a tie switch
+    must cross a feeder segment without connecting, a small semicircle
+    flyover (hop) is drawn on the tie to indicate the lines are independent.
     """
     try:
         import matplotlib.pyplot as plt
         import matplotlib.patches as mpatches
         import matplotlib.lines as mlines
-        from matplotlib.patches import FancyArrowPatch
+        from matplotlib.patches import Arc
     except ImportError:
         raise ImportError(
             "matplotlib is required for draw_network(). pip install matplotlib"
         )
 
-    # Manual positions: healthy feeders left, outaged feeders right.
+    BG = "#151525"
+    HOP_R = 0.12  # radius of the crossing-over semicircle
+
+    # ── Node positions ───────────────────────────────────────────────────────
+    # A1-b is at y=1.8 (same as X1-C) so T1 is a single horizontal run.
+    # B2-a is at y=3.0 (same as X1-B / X2-B) giving T3 a horizontal channel.
     POS = {
         "SUB-A": (1.0, 5.5), "SUB-B": (5.5, 5.5), "SUB-X":  (9.5, 5.5),
-        "A1-a":  (1.0, 4.2), "A1-b":  (1.0, 3.0),
-        "B1-a":  (4.5, 4.2), "B2-a":  (6.5, 4.2),
+        "A1-a":  (1.0, 4.2), "A1-b":  (1.0, 1.8),
+        "B1-a":  (4.5, 4.2), "B2-a":  (6.5, 3.0),
         "X1-A":  (8.5, 4.2), "X1-B":  (8.5, 3.0), "X1-C":  (8.5, 1.8),
         "X2-A": (10.5, 4.2), "X2-B": (10.5, 3.0),
     }
+
     FEEDER_COLORS = {
         "A1": "#1a78c2", "B1": "#27ae60", "B2": "#16a2b8",
         "X1": "#e07b00", "X2": "#cc3333",
     }
-    BG = "#151525"
 
-    # Derive switch / energization states.
+    # ── Explicit orthogonal routes (ordered waypoint lists) ──────────────────
+    # CBs fanning out from a substation use an L-route: [start, corner, end].
+    # T3 dips to y=2.7 so its horizontal run clears X1-B at (8.5, 3.0).
+    ROUTES = {
+        "CB-A1":    [(1.0, 5.5), (1.0, 4.2)],
+        "CABLE-A1": [(1.0, 4.2), (1.0, 1.8)],
+        "CB-B1":    [(5.5, 5.5), (4.5, 5.5), (4.5, 4.2)],
+        "CB-B2":    [(5.5, 5.5), (6.5, 5.5), (6.5, 3.0)],
+        "CB-X1":    [(9.5, 5.5), (8.5, 5.5), (8.5, 4.2)],
+        "CB-X2":    [(9.5, 5.5), (10.5, 5.5), (10.5, 4.2)],
+        "S-X1-AB":  [(8.5, 4.2), (8.5, 3.0)],
+        "S-X1-BC":  [(8.5, 3.0), (8.5, 1.8)],
+        "S-X2-AB":  [(10.5, 4.2), (10.5, 3.0)],
+        "T1":       [(1.0, 1.8), (8.5, 1.8)],
+        "T2":       [(4.5, 4.2), (8.5, 4.2)],
+        "T3":       [(6.5, 3.0), (6.5, 2.7), (10.5, 2.7), (10.5, 3.0)],
+    }
+
+    # Crossings where a tie arcs over a feeder segment.
+    # The feeder draws straight through; the tie carries the hop.
+    #   T2 crosses CB-B2's vertical at (6.5, 4.2)
+    #   T3 crosses S-X1-BC's vertical at (8.5, 2.7)
+    HOPS = {
+        "T2": [(6.5, 4.2)],
+        "T3": [(8.5, 2.7)],
+    }
+
+    # Explicit switch-symbol positions, chosen to avoid crossings and corners.
+    SYMBOL_POS = {
+        "CB-A1":   (1.0,  4.85),
+        "CB-B1":   (4.5,  4.85),
+        "CB-B2":   (6.5,  4.25),
+        "CB-X1":   (8.5,  4.85),
+        "CB-X2":  (10.5,  4.85),
+        "S-X1-AB": (8.5,  3.60),
+        "S-X1-BC": (8.5,  2.40),
+        "S-X2-AB": (10.5, 3.60),
+        "T1":      (4.75, 1.8),
+        "T2":      (5.5,  4.2),   # left of the CB-B2 crossing
+        "T3":      (7.5,  2.7),   # between the bend and the S-X1-BC crossing
+    }
+
+    # ── Switch / energization states ─────────────────────────────────────────
     if sol is not None:
         xstate = sol["x"]
         ystate = sol["y"]
@@ -404,64 +455,98 @@ def draw_network(sol=None, block_amps=None):
             for n in NODES
         }
 
-    # ── Canvas ──────────────────────────────────────────────────────────────
+    # ── Canvas ───────────────────────────────────────────────────────────────
     fig, ax = plt.subplots(figsize=(16, 9))
-    ax.set_xlim(-0.3, 12.5)
-    ax.set_ylim(0.8, 7.0)
+    ax.set_xlim(-0.5, 12.5)
+    ax.set_ylim(0.5, 7.0)
     ax.set_aspect("equal")
     ax.axis("off")
     fig.patch.set_facecolor(BG)
     ax.set_facecolor(BG)
 
-    # ── Edges ───────────────────────────────────────────────────────────────
+    def _draw_route(pts, hops_xy, color, lw, ls, zorder):
+        """
+        Draw an orthogonal polyline, inserting a semicircle flyover at each
+        hop point.  Hops arch upward on horizontal segments.
+        """
+        for i in range(len(pts) - 1):
+            x0, y0 = pts[i]
+            x1, y1 = pts[i + 1]
+            is_h = abs(y1 - y0) < 1e-9
+
+            # Collect hop positions that fall on this horizontal segment.
+            seg_hops = []
+            if is_h:
+                for hx, hy in hops_xy:
+                    if (abs(hy - y0) < 1e-9 and
+                            min(x0, x1) + 1e-9 < hx < max(x0, x1) - 1e-9):
+                        seg_hops.append(hx)
+
+            if not seg_hops:
+                ax.plot([x0, x1], [y0, y1], color=color, lw=lw, linestyle=ls,
+                        solid_capstyle="butt", zorder=zorder)
+            else:
+                seg_hops.sort(reverse=(x0 > x1))
+                cur = x0
+                for hx in seg_hops:
+                    ax.plot([cur, hx - HOP_R], [y0, y0],
+                            color=color, lw=lw, linestyle=ls,
+                            solid_capstyle="butt", zorder=zorder)
+                    # Semicircle arching upward over the crossing feeder.
+                    ax.add_patch(Arc(
+                        (hx, y0), 2 * HOP_R, 2 * HOP_R,
+                        angle=0, theta1=0, theta2=180,
+                        color=color, lw=lw, zorder=zorder + 1,
+                    ))
+                    cur = hx + HOP_R
+                ax.plot([cur, x1], [y0, y1], color=color, lw=lw, linestyle=ls,
+                        solid_capstyle="butt", zorder=zorder)
+
+    # ── Draw edges ────────────────────────────────────────────────────────────
     for eid, ed in EDGES.items():
-        x0, y0 = POS[ed["u"]]
-        x1, y1 = POS[ed["v"]]
         is_closed = bool(xstate[eid])
         feeder = NODES[ed["u"]].get("feeder") or NODES[ed["v"]].get("feeder")
         line_color = FEEDER_COLORS.get(feeder, "#aaaaaa") if is_closed else "#445566"
-        lw = 3.0 if ed["kind"] in ("cb", "cable") else 2.2
-        mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+        lw = 3.0 if ed["kind"] in ("cb", "cable") else 2.0
+        ls = "--" if ed["kind"] == "tie" else "-"
 
-        if ed["kind"] == "tie":
-            # Arc outward so long ties clear the main feeder lines.
-            rad = 0.2 if abs(y1 - y0) > 0.3 else 0.0
-            ax.add_patch(FancyArrowPatch(
-                (x0, y0), (x1, y1), arrowstyle="-",
-                color=line_color, linewidth=lw, linestyle="dashed",
-                connectionstyle=f"arc3,rad={rad}", zorder=2,
-            ))
-        else:
-            ax.plot([x0, x1], [y0, y1],
-                    color=line_color, lw=lw, solid_capstyle="round", zorder=2)
+        _draw_route(ROUTES[eid], HOPS.get(eid, []),
+                    line_color, lw, ls, zorder=2)
 
         # Switch symbol: filled circle = closed, circled-X = open.
         if ed["switchable"]:
+            sx, sy = SYMBOL_POS[eid]
             sym_color = "#dddddd" if is_closed else "#ff6b6b"
             r = 0.13
             ax.add_patch(plt.Circle(
-                (mx, my), r, facecolor=BG, edgecolor=sym_color, lw=2.5, zorder=5
+                (sx, sy), r, facecolor=BG, edgecolor=sym_color, lw=2.5, zorder=5
             ))
             if is_closed:
-                ax.add_patch(plt.Circle((mx, my), r * 0.4, color=sym_color, zorder=6))
+                ax.add_patch(plt.Circle((sx, sy), r * 0.4, color=sym_color, zorder=6))
             else:
                 r2 = r * 0.55
-                ax.plot([mx - r2, mx + r2], [my - r2, my + r2],
+                ax.plot([sx - r2, sx + r2], [sy - r2, sy + r2],
                         color=sym_color, lw=1.8, zorder=6)
-                ax.plot([mx - r2, mx + r2], [my + r2, my - r2],
+                ax.plot([sx - r2, sx + r2], [sy + r2, sy - r2],
                         color=sym_color, lw=1.8, zorder=6)
 
-        # Edge label, offset perpendicular to the line.
-        dx, dy = x1 - x0, y1 - y0
-        L = np.hypot(dx, dy)
-        ox, oy = (-dy / L * 0.27, dx / L * 0.27) if L > 1e-9 else (0.25, 0)
-        ax.text(mx + ox, my + oy, eid,
-                fontsize=6.5, ha="center", va="center", color="#bbbbcc",
-                bbox=dict(boxstyle="round,pad=0.1", facecolor=BG,
-                          edgecolor="none", alpha=0.65),
-                zorder=7)
+            ax.text(sx + 0.18, sy + 0.18, eid,
+                    fontsize=6.5, ha="left", va="bottom", color="#bbbbcc",
+                    bbox=dict(boxstyle="round,pad=0.1", facecolor=BG,
+                              edgecolor="none", alpha=0.65),
+                    zorder=7)
+        else:
+            # Label at midpoint of route for non-switchable edges (CABLE-A1).
+            pts = ROUTES[eid]
+            mx = (pts[0][0] + pts[-1][0]) / 2
+            my = (pts[0][1] + pts[-1][1]) / 2
+            ax.text(mx + 0.18, my, eid,
+                    fontsize=6.5, ha="left", va="center", color="#888899",
+                    bbox=dict(boxstyle="round,pad=0.1", facecolor=BG,
+                              edgecolor="none", alpha=0.65),
+                    zorder=7)
 
-    # ── Nodes ────────────────────────────────────────────────────────────────
+    # ── Draw nodes ────────────────────────────────────────────────────────────
     for nid, nd in NODES.items():
         x, y = POS[nid]
         energized = bool(ystate.get(nid, 1))
@@ -486,14 +571,15 @@ def draw_network(sol=None, block_amps=None):
             ax.text(x, y + 0.08, nid, ha="center", va="center",
                     fontsize=6.5, fontweight="bold",
                     color="white" if energized else "#666677", zorder=9)
-            ax.text(x, y - 0.12, f"{nd['customers']}c", ha="center", va="center",
-                    fontsize=6, color="white" if energized else "#666677", zorder=9)
+            ax.text(x, y - 0.12, f"{nd['customers']}c",
+                    ha="center", va="center", fontsize=6,
+                    color="white" if energized else "#666677", zorder=9)
             if block_amps and nid in block_amps:
                 ax.text(x + 0.42, y + 0.25, f"{block_amps[nid]:.0f} A",
                         fontsize=6.5, color="#f0c040",
                         ha="left", va="bottom", zorder=9)
 
-    # ── Legend ───────────────────────────────────────────────────────────────
+    # ── Legend ────────────────────────────────────────────────────────────────
     leg_items = [
         mpatches.Patch(facecolor="#2471a3", edgecolor="#888899",
                        label="Healthy substation bus"),
@@ -509,6 +595,8 @@ def draw_network(sol=None, block_amps=None):
         mlines.Line2D([0], [0], color="w", marker="o", markerfacecolor=BG,
                       markeredgecolor="#ff6b6b", markersize=12, markeredgewidth=2.5,
                       label="Switch open (×)"),
+        mlines.Line2D([0], [0], color="#888899", lw=2,
+                      label="⌢  crossing — not a junction"),
     ]
     leg = ax.legend(handles=leg_items, loc="lower right", fontsize=8,
                     facecolor="#1e1e30", edgecolor="#444455", labelcolor="white",
