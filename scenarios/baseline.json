@@ -1,0 +1,136 @@
+{
+  "name": "baseline",
+  "description": "Three-substation baseline: SUB-X outaged (ring+tee X1, tee X2), SUB-A and SUB-B healthy. Multiple inter-substation tie points.",
+
+  "outage_substation": "SUB-X",
+
+  "nodes": {
+    "SUB-X": {"kind": "bus", "headroom_amps": 900.0},
+    "SUB-A": {"kind": "bus", "headroom_amps": 900.0},
+    "SUB-B": {"kind": "bus", "headroom_amps": 900.0},
+    "X1-A":  {"kind": "block", "feeder": "X1", "kva": 900,  "customers": 360},
+    "X1-B":  {"kind": "block", "feeder": "X1", "kva": 700,  "customers": 280},
+    "X1-C":  {"kind": "block", "feeder": "X1", "kva": 600,  "customers": 240},
+    "X1-D":  {"kind": "block", "feeder": "X1", "kva": 650,  "customers": 260},
+    "X1-E":  {"kind": "block", "feeder": "X1", "kva": 500,  "customers": 200},
+    "X1-F":  {"kind": "block", "feeder": "X1", "kva": 400,  "customers": 160},
+    "X2-A":  {"kind": "block", "feeder": "X2", "kva": 800,  "customers": 320},
+    "X2-B":  {"kind": "block", "feeder": "X2", "kva": 600,  "customers": 240},
+    "X2-C":  {"kind": "block", "feeder": "X2", "kva": 450,  "customers": 180},
+    "A1-a":  {"kind": "block", "feeder": "A1", "kva": 1100, "customers": 440},
+    "A1-b":  {"kind": "block", "feeder": "A1", "kva": 300,  "customers": 120},
+    "A2-a":  {"kind": "block", "feeder": "A2", "kva": 950,  "customers": 380},
+    "B1-a":  {"kind": "block", "feeder": "B1", "kva": 1200, "customers": 480},
+    "B1-b":  {"kind": "block", "feeder": "B1", "kva": 350,  "customers": 140}
+  },
+
+  "edges": {
+    "CB-X1":   {"u": "SUB-X", "v": "X1-A", "amp": 420, "closed": 1, "switchable": true,  "remote": true,  "kind": "cb"},
+    "CB-X2":   {"u": "SUB-X", "v": "X2-A", "amp": 420, "closed": 1, "switchable": true,  "remote": true,  "kind": "cb"},
+    "CB-A1":   {"u": "SUB-A", "v": "A1-a", "amp": 420, "closed": 1, "switchable": true,  "remote": true,  "kind": "cb"},
+    "CB-A2":   {"u": "SUB-A", "v": "A2-a", "amp": 420, "closed": 1, "switchable": true,  "remote": true,  "kind": "cb"},
+    "CB-B1":   {"u": "SUB-B", "v": "B1-a", "amp": 480, "closed": 1, "switchable": true,  "remote": true,  "kind": "cb"},
+    "S-X1-AB": {"u": "X1-A", "v": "X1-B", "amp": 300, "closed": 1, "switchable": true,  "remote": true,  "kind": "switch"},
+    "S-X1-BC": {"u": "X1-B", "v": "X1-C", "amp": 260, "closed": 1, "switchable": true,  "remote": false, "kind": "switch"},
+    "S-X1-AD": {"u": "X1-A", "v": "X1-D", "amp": 300, "closed": 1, "switchable": true,  "remote": false, "kind": "switch"},
+    "S-X1-DE": {"u": "X1-D", "v": "X1-E", "amp": 260, "closed": 1, "switchable": true,  "remote": true,  "kind": "switch"},
+    "S-X1-EF": {"u": "X1-E", "v": "X1-F", "amp": 220, "closed": 1, "switchable": true,  "remote": false, "kind": "switch"},
+    "R-X1":    {"u": "X1-C", "v": "X1-F", "amp": 220, "closed": 0, "switchable": true,  "remote": true,  "kind": "ring"},
+    "S-X2-AB": {"u": "X2-A", "v": "X2-B", "amp": 300, "closed": 1, "switchable": true,  "remote": true,  "kind": "switch"},
+    "S-X2-BC": {"u": "X2-B", "v": "X2-C", "amp": 240, "closed": 1, "switchable": false, "remote": false, "kind": "cable"},
+    "S-A1-ab": {"u": "A1-a", "v": "A1-b", "amp": 240, "closed": 1, "switchable": false, "remote": false, "kind": "cable"},
+    "S-B1-ab": {"u": "B1-a", "v": "B1-b", "amp": 260, "closed": 1, "switchable": false, "remote": false, "kind": "cable"},
+    "T1":      {"u": "A1-b", "v": "X1-C", "amp": 220, "closed": 0, "switchable": true,  "remote": true,  "kind": "tie"},
+    "T2":      {"u": "B1-a", "v": "X1-E", "amp": 200, "closed": 0, "switchable": true,  "remote": false, "kind": "tie"},
+    "T3":      {"u": "A2-a", "v": "X2-C", "amp": 240, "closed": 0, "switchable": true,  "remote": true,  "kind": "tie"},
+    "T4":      {"u": "B1-b", "v": "X2-B", "amp": 200, "closed": 0, "switchable": true,  "remote": true,  "kind": "tie"}
+  },
+
+  "feeders": {
+    "X1": {"cb": "CB-X1", "root": "X1-A"},
+    "X2": {"cb": "CB-X2", "root": "X2-A"},
+    "A1": {"cb": "CB-A1", "root": "A1-a"},
+    "A2": {"cb": "CB-A2", "root": "A2-a"},
+    "B1": {"cb": "CB-B1", "root": "B1-a"}
+  },
+
+  "feeder_rtus": {
+    "X1": [{"switch": "S-X1-AD", "downstream": ["X1-D", "X1-E", "X1-F"]}],
+    "X2": [{"switch": "S-X2-AB", "downstream": ["X2-B", "X2-C"]}]
+  },
+
+  "feeder_peak_target": {
+    "X1": 360.0, "X2": 250.0,
+    "A1": 230.0, "A2": 150.0, "B1": 300.0
+  },
+
+  "solver_params": {
+    "action_cost_remote":    1.0,
+    "action_cost_manual":    5.0,
+    "ring_relocate_penalty": 2.0,
+    "restore_weight":        100.0
+  },
+
+  "diagram": {
+    "feeder_colors": {
+      "A1": "#1a78c2", "A2": "#2e86ab",
+      "B1": "#27ae60",
+      "X1": "#e07b00", "X2": "#cc3333"
+    },
+
+    "pos": {
+      "SUB-A": [1.5,  8.5],  "SUB-B": [5.5,  8.5],  "SUB-X": [10.5, 8.5],
+      "A1-a":  [1.5,  7.0],  "A1-b":  [1.5,  5.5],
+      "A2-a":  [3.0,  7.0],
+      "B1-a":  [5.5,  7.0],  "B1-b":  [5.5,  5.5],
+      "X1-A":  [9.5,  7.0],
+      "X1-B":  [8.5,  5.5],  "X1-C":  [8.5,  4.0],
+      "X1-D":  [10.5, 5.5],  "X1-E":  [10.5, 4.0],
+      "X1-F":  [9.5,  2.5],
+      "X2-A":  [12.0, 7.0],
+      "X2-B":  [12.0, 5.5],  "X2-C":  [13.0, 5.5]
+    },
+
+    "routes": {
+      "CB-A1":   [[1.5,  8.5], [1.5,  7.0]],
+      "CB-A2":   [[1.5,  8.5], [3.0,  8.5], [3.0,  7.0]],
+      "CB-B1":   [[5.5,  8.5], [5.5,  7.0]],
+      "CB-X1":   [[10.5, 8.5], [9.5,  8.5], [9.5,  7.0]],
+      "CB-X2":   [[10.5, 8.5], [12.0, 8.5], [12.0, 7.0]],
+      "S-A1-ab": [[1.5,  7.0], [1.5,  5.5]],
+      "S-B1-ab": [[5.5,  7.0], [5.5,  5.5]],
+      "S-X2-BC": [[12.0, 5.5], [13.0, 5.5]],
+      "S-X1-AB": [[9.5,  7.0], [8.5,  7.0], [8.5,  5.5]],
+      "S-X1-BC": [[8.5,  5.5], [8.5,  4.0]],
+      "S-X1-AD": [[9.5,  7.0], [10.5, 7.0], [10.5, 5.5]],
+      "S-X1-DE": [[10.5, 5.5], [10.5, 4.0]],
+      "S-X1-EF": [[10.5, 4.0], [10.5, 2.5], [9.5,  2.5]],
+      "R-X1":    [[8.5,  4.0], [8.5,  2.5], [9.5,  2.5]],
+      "S-X2-AB": [[12.0, 7.0], [12.0, 5.5]],
+      "T1":      [[1.5,  5.5], [1.5,  4.0], [8.5,  4.0]],
+      "T2":      [[5.5,  7.0], [7.0,  7.0], [7.0,  4.0], [10.5, 4.0]],
+      "T3":      [[3.0,  7.0], [3.0,  5.0], [13.0, 5.0], [13.0, 5.5]],
+      "T4":      [[5.5,  5.5], [5.5,  6.0], [12.0, 6.0], [12.0, 5.5]]
+    },
+
+    "hops": {
+      "T2": [[8.5, 4.0]],
+      "T3": [[8.5, 5.0], [10.5, 5.0]],
+      "T4": [[8.5, 6.0], [10.5, 6.0]]
+    },
+
+    "symbol_pos": {
+      "CB-A1":   [1.5,  7.75], "CB-A2":   [3.0,  7.75],
+      "CB-B1":   [5.5,  7.75],
+      "CB-X1":   [9.5,  7.75], "CB-X2":   [12.0, 7.75],
+      "S-X1-AB": [8.5,  6.25], "S-X1-BC": [8.5,  4.75],
+      "S-X1-AD": [10.5, 6.25], "S-X1-DE": [10.5, 4.75],
+      "S-X1-EF": [10.5, 3.25], "R-X1":    [8.5,  3.25],
+      "S-X2-AB": [12.0, 6.25],
+      "T1":      [5.0,  4.0],
+      "T2":      [7.0,  5.5],
+      "T3":      [8.0,  5.0],
+      "T4":      [8.75, 6.0]
+    }
+  }
+}

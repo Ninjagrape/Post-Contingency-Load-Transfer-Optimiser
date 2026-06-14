@@ -28,8 +28,14 @@ Pipeline:
   6. Render an ADMS-style one-line diagram (requires matplotlib).
 
 Dependencies: numpy, networkx, pulp (bundled CBC), matplotlib (optional).
+
+Scenarios are loaded from JSON files in the scenarios/ directory.
+Run:  python offload_planner.py [season] [scenario]
+e.g.: python offload_planner.py MAX baseline
 """
 
+import json
+import os
 import numpy as np
 import networkx as nx
 import pulp
@@ -47,102 +53,48 @@ SEASON_MONTHS = {
 }
 
 # ===========================================================================
-# NETWORK MODEL
+# SCENARIO — populated at runtime by load_scenario()
 # ===========================================================================
-# Three substations:
-#   SUB-X : OUTAGED. Two CBs -> feeder X1 (ring + tee) and X2 (tee).
-#   SUB-A : healthy.  Feeders A1 (with lateral) and A2.
-#   SUB-B : healthy.  Feeder B1 (with lateral).
-#
-# X1 is a RING: leaves CB-X1, branches at X1-A into leg-1 (X1-B -> X1-C)
-# and leg-2 tee (X1-D -> X1-E -> X1-F). The ring is closed through R-X1
-# between X1-C and X1-F (normally open today -> radial; planner may relocate
-# the open point at an extra penalty cost).
-#
-# Multiple tie points (all normally open):
-#   T1: A1-b  <-> X1-C   (SUB-A backfeeds X1 leg-1 tail)
-#   T2: B1-a  <-> X1-E   (SUB-B backfeeds X1 leg-2)
-#   T3: A2-a  <-> X2-C   (SUB-A backfeeds X2 lateral)
-#   T4: B1-b  <-> X2-B   (SUB-B backfeeds X2 main)
+NODES              = {}
+EDGES              = {}
+FEEDERS            = {}
+FEEDER_RTUS        = {}
+OUTAGE_SUBSTATION  = ""
+FEEDER_PEAK_TARGET = {}
+ACTION_COST_REMOTE    = 1.0
+ACTION_COST_MANUAL    = 5.0
+RING_RELOCATE_PENALTY = 2.0
+RESTORE_WEIGHT        = 100.0
 
-NODES = {
-    # substation buses (sources)
-    "SUB-X": dict(kind="bus", headroom_amps=900.0),
-    "SUB-A": dict(kind="bus", headroom_amps=900.0),
-    "SUB-B": dict(kind="bus", headroom_amps=900.0),
-    # X1 feeder (ring + tee): kva = connected transformer kVA (allocation weight)
-    "X1-A": dict(kind="block", feeder="X1", kva=900,  customers=360),
-    "X1-B": dict(kind="block", feeder="X1", kva=700,  customers=280),  # leg-1
-    "X1-C": dict(kind="block", feeder="X1", kva=600,  customers=240),  # leg-1 tail
-    "X1-D": dict(kind="block", feeder="X1", kva=650,  customers=260),  # leg-2 tee
-    "X1-E": dict(kind="block", feeder="X1", kva=500,  customers=200),  # leg-2
-    "X1-F": dict(kind="block", feeder="X1", kva=400,  customers=160),  # ring join
-    # X2 feeder (tee)
-    "X2-A": dict(kind="block", feeder="X2", kva=800,  customers=320),
-    "X2-B": dict(kind="block", feeder="X2", kva=600,  customers=240),  # main
-    "X2-C": dict(kind="block", feeder="X2", kva=450,  customers=180),  # lateral
-    # SUB-A feeders
-    "A1-a": dict(kind="block", feeder="A1", kva=1100, customers=440),
-    "A1-b": dict(kind="block", feeder="A1", kva=300,  customers=120),  # lateral
-    "A2-a": dict(kind="block", feeder="A2", kva=950,  customers=380),
-    # SUB-B feeder
-    "B1-a": dict(kind="block", feeder="B1", kva=1200, customers=480),
-    "B1-b": dict(kind="block", feeder="B1", kva=350,  customers=140),  # lateral
-}
 
-EDGES = {
-    # feeder-head circuit breakers
-    "CB-X1":   dict(u="SUB-X", v="X1-A", amp=420, closed=1, switchable=True,  remote=True,  kind="cb"),
-    "CB-X2":   dict(u="SUB-X", v="X2-A", amp=420, closed=1, switchable=True,  remote=True,  kind="cb"),
-    "CB-A1":   dict(u="SUB-A", v="A1-a", amp=420, closed=1, switchable=True,  remote=True,  kind="cb"),
-    "CB-A2":   dict(u="SUB-A", v="A2-a", amp=420, closed=1, switchable=True,  remote=True,  kind="cb"),
-    "CB-B1":   dict(u="SUB-B", v="B1-a", amp=480, closed=1, switchable=True,  remote=True,  kind="cb"),
-    # X1 ring + tee internals
-    "S-X1-AB": dict(u="X1-A", v="X1-B", amp=300, closed=1, switchable=True,  remote=True,  kind="switch"),
-    "S-X1-BC": dict(u="X1-B", v="X1-C", amp=260, closed=1, switchable=True,  remote=False, kind="switch"),
-    "S-X1-AD": dict(u="X1-A", v="X1-D", amp=300, closed=1, switchable=True,  remote=False, kind="switch"),
-    "S-X1-DE": dict(u="X1-D", v="X1-E", amp=260, closed=1, switchable=True,  remote=True,  kind="switch"),
-    "S-X1-EF": dict(u="X1-E", v="X1-F", amp=220, closed=1, switchable=True,  remote=False, kind="switch"),
-    "R-X1":    dict(u="X1-C", v="X1-F", amp=220, closed=0, switchable=True,  remote=True,  kind="ring"),
-    # X2 tee internals
-    "S-X2-AB": dict(u="X2-A", v="X2-B", amp=300, closed=1, switchable=True,  remote=True,  kind="switch"),
-    "S-X2-BC": dict(u="X2-B", v="X2-C", amp=240, closed=1, switchable=False, remote=False, kind="cable"),
-    # healthy feeder internals (solid cable, cannot switch)
-    "S-A1-ab": dict(u="A1-a", v="A1-b", amp=240, closed=1, switchable=False, remote=False, kind="cable"),
-    "S-B1-ab": dict(u="B1-a", v="B1-b", amp=260, closed=1, switchable=False, remote=False, kind="cable"),
-    # normally-open inter-substation ties
-    "T1":      dict(u="A1-b", v="X1-C", amp=220, closed=0, switchable=True,  remote=True,  kind="tie"),
-    "T2":      dict(u="B1-a", v="X1-E", amp=200, closed=0, switchable=True,  remote=False, kind="tie"),
-    "T3":      dict(u="A2-a", v="X2-C", amp=240, closed=0, switchable=True,  remote=True,  kind="tie"),
-    "T4":      dict(u="B1-b", v="X2-B", amp=200, closed=0, switchable=True,  remote=True,  kind="tie"),
-}
+def load_scenario(name):
+    """Load a scenario from scenarios/<name>.json.
 
-FEEDERS = {
-    "X1": dict(cb="CB-X1", root="X1-A"),
-    "X2": dict(cb="CB-X2", root="X2-A"),
-    "A1": dict(cb="CB-A1", root="A1-a"),
-    "A2": dict(cb="CB-A2", root="A2-a"),
-    "B1": dict(cb="CB-B1", root="B1-a"),
-}
+    Sets all module-level network globals and returns the raw scenario dict
+    (including the 'diagram' key consumed by draw_network).
+    """
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "scenarios", f"{name}.json")
+    with open(path) as f:
+        sc = json.load(f)
 
-# Mid-feeder RTUs: list of {switch, downstream} entries per feeder.
-# downstream = blocks on the far side of that RTU on the normal radial tree.
-FEEDER_RTUS = {
-    "X1": [dict(switch="S-X1-AD", downstream=["X1-D", "X1-E", "X1-F"])],
-    "X2": [dict(switch="S-X2-AB", downstream=["X2-B", "X2-C"])],
-}
+    global NODES, EDGES, FEEDERS, FEEDER_RTUS, OUTAGE_SUBSTATION, FEEDER_PEAK_TARGET
+    global ACTION_COST_REMOTE, ACTION_COST_MANUAL, RING_RELOCATE_PENALTY, RESTORE_WEIGHT
 
-OUTAGE_SUBSTATION = "SUB-X"
+    NODES              = sc["nodes"]
+    EDGES              = sc["edges"]
+    FEEDERS            = sc["feeders"]
+    FEEDER_RTUS        = sc.get("feeder_rtus", {})
+    OUTAGE_SUBSTATION  = sc["outage_substation"]
+    FEEDER_PEAK_TARGET = sc["feeder_peak_target"]
 
-FEEDER_PEAK_TARGET = {
-    "X1": 360.0, "X2": 250.0,
-    "A1": 230.0, "A2": 150.0, "B1": 300.0,
-}
+    p = sc.get("solver_params", {})
+    ACTION_COST_REMOTE    = p.get("action_cost_remote",    1.0)
+    ACTION_COST_MANUAL    = p.get("action_cost_manual",    5.0)
+    RING_RELOCATE_PENALTY = p.get("ring_relocate_penalty", 2.0)
+    RESTORE_WEIGHT        = p.get("restore_weight",       100.0)
 
-ACTION_COST_REMOTE    = 1.0   # SCADA click
-ACTION_COST_MANUAL    = 5.0   # truck roll
-RING_RELOCATE_PENALTY = 2.0   # extra cost to move a healthy ring's open point
-RESTORE_WEIGHT        = 100.0 # per customer; dwarfs switching costs
+    return sc
 
 
 # ===========================================================================
@@ -441,15 +393,21 @@ def explain_single_tie_rejections(block_amps):
 # ===========================================================================
 # 6. NETWORK DIAGRAM (ADMS-STYLE ONE-LINE VIEW)
 # ===========================================================================
-def draw_network(sol=None, block_amps=None):
-    """ADMS-style one-line diagram with orthogonal routing for the v2 network.
+def draw_network(sol=None, block_amps=None, diagram=None):
+    """ADMS-style one-line diagram with orthogonal routing.
 
     sol        : result from solve_offload(); None shows the initial outage state.
     block_amps : block-name -> amps; annotates each load block when provided.
+    diagram    : diagram sub-dict from the loaded scenario (pos, routes, hops,
+                 symbol_pos, feeder_colors).  If None the diagram is skipped.
 
     Tie and ring switches are drawn dashed.  Where a dashed tie line must cross
     a feeder segment it does not connect to, a semicircle flyover (hop) is drawn.
     """
+    if diagram is None:
+        print("(No diagram data in scenario; skipping network diagram.)")
+        return None, None
+
     try:
         import matplotlib.pyplot as plt
         import matplotlib.patches as mpatches
@@ -463,91 +421,12 @@ def draw_network(sol=None, block_amps=None):
     BG    = "#151525"
     HOP_R = 0.12
 
-    # ── Node positions ───────────────────────────────────────────────────────
-    POS = {
-        # substations
-        "SUB-A": (1.5,  8.5),
-        "SUB-B": (5.5,  8.5),
-        "SUB-X": (10.5, 8.5),
-        # SUB-A feeders
-        "A1-a":  (1.5,  7.0),  "A1-b": (1.5,  5.5),
-        "A2-a":  (3.0,  7.0),
-        # SUB-B feeder
-        "B1-a":  (5.5,  7.0),  "B1-b": (5.5,  5.5),
-        # X1 ring + tee
-        "X1-A":  (9.5,  7.0),
-        "X1-B":  (8.5,  5.5),  "X1-C": (8.5,  4.0),   # leg-1
-        "X1-D": (10.5,  5.5),  "X1-E": (10.5, 4.0),   # leg-2 tee
-        "X1-F":  (9.5,  2.5),                           # ring join node
-        # X2 tee
-        "X2-A": (12.0,  7.0),
-        "X2-B": (12.0,  5.5),  "X2-C": (13.0, 5.5),   # lateral
-    }
-
-    FEEDER_COLORS = {
-        "A1": "#1a78c2", "A2": "#2e86ab",
-        "B1": "#27ae60",
-        "X1": "#e07b00", "X2": "#cc3333",
-    }
-
-    # ── Orthogonal routes (ordered waypoint lists) ───────────────────────────
-    # All connections are horizontal or vertical only.
-    ROUTES = {
-        # circuit breakers
-        "CB-A1":   [(1.5,  8.5), (1.5,  7.0)],
-        "CB-A2":   [(1.5,  8.5), (3.0,  8.5), (3.0,  7.0)],
-        "CB-B1":   [(5.5,  8.5), (5.5,  7.0)],
-        "CB-X1":   [(10.5, 8.5), (9.5,  8.5), (9.5,  7.0)],
-        "CB-X2":   [(10.5, 8.5), (12.0, 8.5), (12.0, 7.0)],
-        # solid cables (non-switchable)
-        "S-A1-ab": [(1.5,  7.0), (1.5,  5.5)],
-        "S-B1-ab": [(5.5,  7.0), (5.5,  5.5)],
-        "S-X2-BC": [(12.0, 5.5), (13.0, 5.5)],
-        # X1 internal switches
-        "S-X1-AB": [(9.5,  7.0), (8.5,  7.0), (8.5,  5.5)],   # L -> leg-1
-        "S-X1-BC": [(8.5,  5.5), (8.5,  4.0)],
-        "S-X1-AD": [(9.5,  7.0), (10.5, 7.0), (10.5, 5.5)],   # L -> leg-2 tee
-        "S-X1-DE": [(10.5, 5.5), (10.5, 4.0)],
-        "S-X1-EF": [(10.5, 4.0), (10.5, 2.5), (9.5,  2.5)],   # L -> ring join
-        "R-X1":    [(8.5,  4.0), (8.5,  2.5), (9.5,  2.5)],   # N/O ring point
-        # X2 internal
-        "S-X2-AB": [(12.0, 7.0), (12.0, 5.5)],
-        # inter-substation ties (normally open, drawn dashed)
-        # T1: A1-b down to y=4.0, then across to X1-C
-        "T1": [(1.5,  5.5), (1.5,  4.0), (8.5,  4.0)],
-        # T2: B1-a right to x=7.0, down to y=4.0, right to X1-E
-        "T2": [(5.5,  7.0), (7.0,  7.0), (7.0,  4.0), (10.5, 4.0)],
-        # T3: A2-a down to y=5.0, across to x=13.0, up to X2-C
-        "T3": [(3.0,  7.0), (3.0,  5.0), (13.0, 5.0), (13.0, 5.5)],
-        # T4: B1-b up to y=6.0, across to x=12.0, down to X2-B
-        "T4": [(5.5,  5.5), (5.5,  6.0), (12.0, 6.0), (12.0, 5.5)],
-    }
-
-    # Where a tie/ring crosses a feeder segment it does not connect to, the
-    # tie carries a semicircle flyover at that (x, y) crossing point.
-    HOPS = {
-        # T2 horizontal at y=4.0 passes over X1-C at x=8.5 (T1 terminus + S-X1-BC)
-        "T2": [(8.5, 4.0)],
-        # T3 horizontal at y=5.0 is crossed by S-X1-BC (x=8.5) and S-X1-DE (x=10.5)
-        "T3": [(8.5, 5.0), (10.5, 5.0)],
-        # T4 horizontal at y=6.0 is crossed by S-X1-AB (x=8.5) and S-X1-AD (x=10.5)
-        "T4": [(8.5, 6.0), (10.5, 6.0)],
-    }
-
-    # Switch-symbol positions (chosen to avoid route corners and node circles).
-    SYMBOL_POS = {
-        "CB-A1":   (1.5,  7.75),  "CB-A2":   (3.0,  7.75),
-        "CB-B1":   (5.5,  7.75),
-        "CB-X1":   (9.5,  7.75),  "CB-X2":   (12.0, 7.75),
-        "S-X1-AB": (8.5,  6.25),  "S-X1-BC": (8.5,  4.75),
-        "S-X1-AD": (10.5, 6.25),  "S-X1-DE": (10.5, 4.75),
-        "S-X1-EF": (10.5, 3.25),  "R-X1":    (8.5,  3.25),
-        "S-X2-AB": (12.0, 6.25),
-        "T1":      (5.0,  4.0),
-        "T2":      (7.0,  5.5),
-        "T3":      (8.0,  5.0),
-        "T4":      (8.75, 6.0),
-    }
+    # ── Unpack diagram data from scenario ────────────────────────────────────
+    POS           = {k: tuple(v) for k, v in diagram["pos"].items()}
+    FEEDER_COLORS = diagram["feeder_colors"]
+    ROUTES        = {k: [tuple(p) for p in v] for k, v in diagram["routes"].items()}
+    HOPS          = {k: [tuple(p) for p in v] for k, v in diagram.get("hops", {}).items()}
+    SYMBOL_POS    = {k: tuple(v) for k, v in diagram["symbol_pos"].items()}
 
     # ── Switch / energisation states ─────────────────────────────────────────
     if sol is not None:
@@ -695,7 +574,7 @@ def draw_network(sol=None, block_amps=None):
         mpatches.Patch(facecolor="#2471a3", edgecolor="#888899",
                        label="Healthy substation bus"),
         mpatches.Patch(facecolor="#c0392b", edgecolor="#888899",
-                       label="Outaged substation (SUB-X)"),
+                       label="Outaged substation"),
         *[mpatches.Patch(facecolor=c, label=f"Feeder {f}")
           for f, c in FEEDER_COLORS.items()],
         mlines.Line2D([0], [0], color="#888899", lw=2, ls="--",
@@ -733,13 +612,15 @@ def draw_network(sol=None, block_amps=None):
 # ===========================================================================
 # MAIN
 # ===========================================================================
-def main(season="MAX"):
+def main(season="MAX", scenario="baseline"):
+    sc = load_scenario(scenario)
+
     profiles, moh = synthesize_year(FEEDERS, FEEDER_PEAK_TARGET)
     peaks         = seasonal_max(profiles, moh, season)
     block_amps    = allocate_block_loads(peaks)
 
-    print(f"=== SUBSTATION OUTAGE OFFLOAD PLAN v2  (season: {season}) ===")
-    print(f"Outage: {OUTAGE_SUBSTATION}  (CB-X1 ring+tee feeder, CB-X2 tee feeder)\n")
+    print(f"=== SUBSTATION OUTAGE OFFLOAD PLAN v2  (season: {season}, scenario: {scenario}) ===")
+    print(f"Outage: {OUTAGE_SUBSTATION}\n")
 
     print("Seasonal feeder maxima (from 1 yr of synthetic CB data):")
     for fn, v in peaks.items():
@@ -813,11 +694,13 @@ def main(season="MAX"):
           f"({n_remote} remote, {n_manual} manual)")
 
     try:
-        draw_network(sol=sol, block_amps=block_amps)
+        draw_network(sol=sol, block_amps=block_amps, diagram=sc.get("diagram"))
     except ImportError:
         print("\n(Install matplotlib to view the network diagram: pip install matplotlib)")
 
 
 if __name__ == "__main__":
     import sys
-    main(sys.argv[1] if len(sys.argv) > 1 else "MAX")
+    season   = sys.argv[1] if len(sys.argv) > 1 else "MAX"
+    scenario = sys.argv[2] if len(sys.argv) > 2 else "baseline"
+    main(season, scenario)
