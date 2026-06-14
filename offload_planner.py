@@ -613,8 +613,17 @@ def draw_network(sol=None, block_amps=None):
                     line_color, lw, ls, zorder=2)
 
         if ed["switchable"]:
-            sx, sy    = SYMBOL_POS[eid]
-            sym_color = "#dddddd" if is_closed else "#ff6b6b"
+            sx, sy   = SYMBOL_POS[eid]
+            normally = ed["closed"]
+            switched = is_closed != normally
+            if is_closed and not switched:
+                sym_color = "#dddddd"   # NC, still closed — no action
+            elif is_closed and switched:
+                sym_color = "#44cc88"   # NO → closed  (switching action)
+            elif not is_closed and switched:
+                sym_color = "#f0c040"   # NC → opened  (switching action)
+            else:
+                sym_color = "#ff6b6b"   # NO, still open — no action
             r = 0.13
             ax.add_patch(plt.Circle(
                 (sx, sy), r, facecolor=BG, edgecolor=sym_color, lw=2.5, zorder=5
@@ -687,10 +696,16 @@ def draw_network(sol=None, block_amps=None):
                       label="Tie / ring switch (dashed)"),
         mlines.Line2D([0], [0], color="w", marker="o", markerfacecolor=BG,
                       markeredgecolor="#dddddd", markersize=12, markeredgewidth=2.5,
-                      label="Switch closed (●)"),
+                      label="NC — closed, no action  (●)"),
         mlines.Line2D([0], [0], color="w", marker="o", markerfacecolor=BG,
                       markeredgecolor="#ff6b6b", markersize=12, markeredgewidth=2.5,
-                      label="Switch open (×)"),
+                      label="NO — open, no action  (×)"),
+        mlines.Line2D([0], [0], color="w", marker="o", markerfacecolor=BG,
+                      markeredgecolor="#f0c040", markersize=12, markeredgewidth=2.5,
+                      label="NC → OPENED  (switching action)  (×)"),
+        mlines.Line2D([0], [0], color="w", marker="o", markerfacecolor=BG,
+                      markeredgecolor="#44cc88", markersize=12, markeredgewidth=2.5,
+                      label="NO → CLOSED  (switching action)  (●)"),
         mlines.Line2D([0], [0], color="#888899", lw=2,
                       label="⌢  crossing — not a junction"),
     ]

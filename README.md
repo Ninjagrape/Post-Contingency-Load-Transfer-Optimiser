@@ -71,7 +71,57 @@ The built-in network (editable at the top of `offload_planner.py`) represents th
 | Sectionalizing switches | Mid-feeder isolation points (remote or manual) |
 | Ring switch `R-X1` | Normally-open ring point; planner may relocate at an extra penalty cost |
 
-### MILP objective and constraints
+### How the optimiser works
+
+#### The problem it's solving
+
+When a substation goes offline there can be dozens of switches that could be opened or closed, and they interact: closing one tie switch might allow another to stay open, or might push a cable over its rating. The number of possible switch combinations grows exponentially — manually checking them all is not feasible under time pressure. This tool hands the problem to a mathematical optimiser that searches the entire space simultaneously and returns the best legal answer.
+
+#### What the optimiser decides
+
+For every switchable device in the network the optimiser makes a binary choice: leave it as-is, or change it. That's the only kind of variable it works with — a yes/no flag per switch. Everything else (how much current flows on each cable, whether a load block has power) is derived from those flags.
+
+#### What "best" means
+
+The optimiser scores every possible combination of switch positions using a single number:
+
+```
+score = (customers restored × 100) − (switching effort cost)
+```
+
+Each customer on a restored block adds 100 points to the score. Each switching action subtracts a small cost (1 for a remote SCADA click, 5 for a manual truck roll, with a further 2 added if a ring open-point has to be relocated). The 100-to-1 ratio means the optimiser will almost always prefer to do an extra truck roll rather than leave customers dark — the switching costs are only tie-breakers when restoration counts are equal.
+
+#### The rules it must obey
+
+The optimiser is only allowed to return a solution that satisfies all of the following simultaneously:
+
+**1. Current must balance at every junction.**
+At every node in the network, the amps flowing in must equal the amps flowing out plus the load on that section. This is just a statement of conservation of charge — current cannot appear from nowhere or disappear. The optimiser enforces this for every node in the model at once.
+
+**2. No cable or breaker can be overloaded.**
+Every edge in the network has a thermal rating in amps. If the optimiser tries to close a tie switch that would push more current than the cable can carry, that combination is illegal. The model uses a signed flow variable so it can enforce the rating in both directions (power can flow either way through a tie switch depending on which side the healthy source is on).
+
+**3. The network must stay tree-shaped — no loops.**
+This is the most important structural rule and requires some explanation.
+
+A distribution network is normally operated radially, meaning power flows from a single source outward through a branching tree — there are no closed loops. The reason is protection: when a fault occurs, the relay at the substation or feeder head trips to isolate it. If the network had a loop, current could feed the fault from both ends simultaneously, the relays would see only a fraction of the fault current from each direction, and they might not trip at all (or trip the wrong device). Keeping the network radial guarantees that each section has exactly one source, so the right breaker always clears the right fault.
+
+After backfeed switching the network will have multiple healthy substations each feeding a tree of restored blocks. Critically, those trees must not join up into a loop — that would mean two substations are linked through the field network, which defeats protection in the same way.
+
+A naive way to enforce this would be to count edges and nodes: a tree with N nodes has exactly N−1 edges, so you could require `closed edges = live nodes − number of healthy sources`. That works on simple networks, but on a meshed topology (one with ring feeders or multiple tie paths between the same pair of substations) you can construct a switch configuration that satisfies the edge count but contains a loop. The edge count is a necessary condition for a tree but not a sufficient one.
+
+The tool uses a stronger method: it runs a **single-commodity connectivity flow** through the closed subgraph at the same time as the main optimisation. Imagine each healthy substation injecting imaginary "connectivity tokens" that can travel through closed switches. Each live load block must absorb exactly one token — no more, no less. If a block can't receive a token it's either disconnected (a problem) or it's sitting inside a loop where tokens are circling without reaching it cleanly (also a problem). Mathematically, a feasible token flow exists if and only if every live block is reachable from exactly one source — which is precisely the definition of a spanning forest. Combined with the edge-count rule, this is both necessary and sufficient: a configuration passes only if it is genuinely radial, with no hidden loops that slipped past the edge count.
+
+**4. No two substations may be directly connected.**
+Even if the loop rules above were somehow satisfied, the optimiser explicitly forbids any switch configuration that would place two healthy substations on the same connected segment of network. This prevents circulating currents between substation transformers, which can cause large uncontrolled flows and relay mis-operations.
+
+#### What the optimiser returns
+
+The solver (CBC, bundled with PuLP) finds the globally optimal switch configuration — the one with the highest score that satisfies all four rule sets simultaneously. It then passes that back to the plan builder, which translates the switch states into an ordered step sequence (opens first to sectionalize, then closes to backfeed) and runs an independent verification pass to confirm the result is legal before presenting it to the operator.
+
+---
+
+### MILP objective and constraints (technical summary)
 
 **Objective:** maximise restored customers (100 pts/customer) minus switching costs:
 
