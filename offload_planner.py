@@ -41,6 +41,9 @@ SEASON_MONTHS = {
     "spring": (3, 4, 5),
     "summer": (6, 7, 8),
     "fall":   (9, 10, 11),
+    # MAX is a pseudo-season: worst-case across all months (yearly peak per feeder).
+    # The plan must hold under every season's peak simultaneously.
+    "MAX":    tuple(range(1, 13)),
 }
 
 # ===========================================================================
@@ -164,6 +167,9 @@ def synthesize_year(feeders, peak_targets):
 
 
 def seasonal_max(profiles, moh, season):
+    if season == "MAX":
+        # Worst-case: use the yearly peak for each feeder regardless of month.
+        return {f: float(p.max()) for f, p in profiles.items()}
     mask = np.isin(moh, SEASON_MONTHS[season])
     return {f: float(p[mask].max()) for f, p in profiles.items()}
 
@@ -727,7 +733,7 @@ def draw_network(sol=None, block_amps=None):
 # ===========================================================================
 # MAIN
 # ===========================================================================
-def main(season="summer"):
+def main(season="MAX"):
     profiles, moh = synthesize_year(FEEDERS, FEEDER_PEAK_TARGET)
     peaks         = seasonal_max(profiles, moh, season)
     block_amps    = allocate_block_loads(peaks)
@@ -814,4 +820,4 @@ def main(season="summer"):
 
 if __name__ == "__main__":
     import sys
-    main(sys.argv[1] if len(sys.argv) > 1 else "summer")
+    main(sys.argv[1] if len(sys.argv) > 1 else "MAX")

@@ -23,7 +23,7 @@ This tool automates that process:
 python offload_planner.py [season]
 ```
 
-`season` is optional and defaults to `summer`. Valid values: `winter`, `spring`, `summer`, `fall`.
+`season` is optional and defaults to `MAX`. Valid values: `winter`, `spring`, `summer`, `fall`, `MAX`.
 
 ### Example output
 
