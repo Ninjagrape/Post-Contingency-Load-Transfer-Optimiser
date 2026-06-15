@@ -178,6 +178,43 @@ def allocate_block_loads(season_peaks):
 # ===========================================================================
 # 4. MILP — connectivity-flow radiality (necessary AND sufficient)
 # ===========================================================================
+def outage_feeders_and_blocks(outage_sub):
+    """Return (outage_cbs, outage_feeders, outage_blocks) for a given outaged bus.
+
+    Twin-feeder aware: one CB may head two feeders that split downstream of a
+    shared riser, so the set of de-energised feeders is found by walking the
+    field network (normally-closed, non-tie/ring edges, excluding bus links)
+    out from each CB far-end, rather than by reading the single feeder label on
+    the block each CB happens to terminate on.
+    """
+    outage_cbs = [e for e, ed in EDGES.items()
+                  if ed["kind"] == "cb" and outage_sub in (ed["u"], ed["v"])]
+    cb_ends = [ed["v"] if ed["u"] == outage_sub else ed["u"]
+               for ed in (EDGES[e] for e in outage_cbs)]
+    adj = {}
+    for ed in EDGES.values():
+        if ed["kind"] in ("tie", "ring") or ed["closed"] != 1:
+            continue
+        if NODES.get(ed["u"], {}).get("kind") == "bus" or \
+           NODES.get(ed["v"], {}).get("kind") == "bus":
+            continue
+        adj.setdefault(ed["u"], set()).add(ed["v"])
+        adj.setdefault(ed["v"], set()).add(ed["u"])
+    seen, stack = set(), list(cb_ends)
+    while stack:
+        n = stack.pop()
+        if n in seen:
+            continue
+        seen.add(n)
+        stack.extend(adj.get(n, ()) - seen)
+    feeders = {NODES[n]["feeder"] for n in seen
+               if NODES.get(n, {}).get("kind") == "block"}
+    blocks = [n for n, d in NODES.items()
+              if d["kind"] == "block" and d["feeder"] in feeders]
+    return outage_cbs, feeders, blocks
+
+
+# ===========================================================================
 def solve_offload(block_amps, outage_sub, verbose=False):
     """Maximise restored customers subject to:
       - outage substation CBs forced open, injection = 0
@@ -194,13 +231,8 @@ def solve_offload(block_amps, outage_sub, verbose=False):
     buses         = [n for n, d in NODES.items() if d["kind"] == "bus"]
     healthy_buses = [b for b in buses if b != outage_sub]
 
-    outage_cbs = [e for e, ed in EDGES.items()
-                  if ed["kind"] == "cb" and outage_sub in (ed["u"], ed["v"])]
-    _cb_ends   = [ed["v"] if ed["u"] == outage_sub else ed["u"]
-                  for ed in (EDGES[e] for e in outage_cbs)]
-    outage_feeders = {NODES[n]["feeder"] for n in _cb_ends}
-    outage_blocks  = [n for n, d in NODES.items()
-                      if d["kind"] == "block" and d["feeder"] in outage_feeders]
+    outage_cbs, outage_feeders, outage_blocks = \
+        outage_feeders_and_blocks(outage_sub)
 
     demand = {n: block_amps.get(n, 0.0) for n in nodes}
     Ncap   = len(nodes)   # connectivity-flow capacity upper bound
@@ -363,14 +395,7 @@ def explain_single_tie_rejections(block_amps):
     """Flag ties whose thermal rating is insufficient to carry their full
     outage-feeder load alone — indicating the planner will need to sectionalize
     (add an OPEN step) before closing that tie."""
-    outage_feeder_names = {
-        NODES[ed["v"]]["feeder"]
-        if NODES.get(ed["v"], {}).get("kind") == "block"
-        else NODES[ed["u"]]["feeder"]
-        for _, ed in EDGES.items()
-        if ed["kind"] == "cb"
-        and (ed["u"] == OUTAGE_SUBSTATION or ed["v"] == OUTAGE_SUBSTATION)
-    }
+    _, outage_feeder_names, _ = outage_feeders_and_blocks(OUTAGE_SUBSTATION)
     notes = []
     for t, ed in EDGES.items():
         if ed["kind"] != "tie":
@@ -434,23 +459,21 @@ def draw_network(sol=None, block_amps=None, diagram=None):
         ystate = sol["y"]
     else:
         xstate = {e: ed["closed"] for e, ed in EDGES.items()}
-        _ocbs  = {e for e, ed in EDGES.items()
-                  if ed["kind"] == "cb"
-                  and (ed["u"] == OUTAGE_SUBSTATION or ed["v"] == OUTAGE_SUBSTATION)}
-        _of    = {NODES[ed["v"]]["feeder"]
-                  for e, ed in EDGES.items()
-                  if e in _ocbs and NODES.get(ed["v"], {}).get("kind") == "block"}
+        _ocbs, _of, _ob = outage_feeders_and_blocks(OUTAGE_SUBSTATION)
+        _ob = set(_ob)
         ystate = {
-            n: 0 if (n == OUTAGE_SUBSTATION or
-                     (NODES[n]["kind"] == "block" and NODES[n].get("feeder") in _of))
+            n: 0 if (n == OUTAGE_SUBSTATION or n in _ob)
                else 1
             for n in NODES
         }
 
     # ── Canvas ───────────────────────────────────────────────────────────────
-    fig, ax = plt.subplots(figsize=(18, 10))
-    ax.set_xlim(-0.5, 14.5)
-    ax.set_ylim(1.2, 9.5)
+    _fs   = tuple(diagram.get("figsize", (18, 10)))
+    _xlim = diagram.get("xlim", (-0.5, 14.5))
+    _ylim = diagram.get("ylim", (1.2, 9.5))
+    fig, ax = plt.subplots(figsize=_fs)
+    ax.set_xlim(*_xlim)
+    ax.set_ylim(*_ylim)
     ax.set_aspect("equal")
     ax.axis("off")
     fig.patch.set_facecolor(BG)
@@ -592,7 +615,7 @@ def draw_network(sol=None, block_amps=None, diagram=None):
                       markeredgecolor="#44cc88", markersize=12, markeredgewidth=2.5,
                       label="NO → CLOSED  (switching action)  (●)"),
         mlines.Line2D([0], [0], color="#888899", lw=2,
-                      label="⌢  crossing — not a junction"),
+                      label="crossing — not a junction"),
     ]
     leg = ax.legend(handles=leg_items, loc="lower left", fontsize=8,
                     facecolor="#1e1e30", edgecolor="#444455", labelcolor="white",

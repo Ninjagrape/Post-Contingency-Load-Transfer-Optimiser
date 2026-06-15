@@ -1,0 +1,1503 @@
+{
+  "name": "metro",
+  "description": "Five-substation metro grid with TWIN FEEDERS. SUB-X is outaged: X1 is a solo double-ring feeder on CB-X1, while X2 and X3 are a TWIN PAIR sharing CB-X23 (one breaker to a shared riser XR-23 that splits to both feeder heads), so X2 and X3 lose supply together. On the healthy side SUB-A's A1 and A2 are likewise a twin pair on CB-A12. SUB-B/C/D feeders are solo. Seven tie paths, parallel ties into X2, undersized ties forcing sectionalizing splits and partial shed.",
+  "outage_substation": "SUB-X",
+  "nodes": {
+    "SUB-X": {
+      "kind": "bus",
+      "headroom_amps": 1400.0
+    },
+    "SUB-A": {
+      "kind": "bus",
+      "headroom_amps": 950.0
+    },
+    "SUB-B": {
+      "kind": "bus",
+      "headroom_amps": 1000.0
+    },
+    "SUB-C": {
+      "kind": "bus",
+      "headroom_amps": 850.0
+    },
+    "SUB-D": {
+      "kind": "bus",
+      "headroom_amps": 800.0
+    },
+    "X1-A": {
+      "kind": "block",
+      "feeder": "X1",
+      "kva": 950,
+      "customers": 380
+    },
+    "X1-B": {
+      "kind": "block",
+      "feeder": "X1",
+      "kva": 720,
+      "customers": 288
+    },
+    "X1-C": {
+      "kind": "block",
+      "feeder": "X1",
+      "kva": 640,
+      "customers": 256
+    },
+    "X1-D": {
+      "kind": "block",
+      "feeder": "X1",
+      "kva": 700,
+      "customers": 280
+    },
+    "X1-E": {
+      "kind": "block",
+      "feeder": "X1",
+      "kva": 540,
+      "customers": 216
+    },
+    "X1-F": {
+      "kind": "block",
+      "feeder": "X1",
+      "kva": 480,
+      "customers": 192
+    },
+    "X1-G": {
+      "kind": "block",
+      "feeder": "X1",
+      "kva": 420,
+      "customers": 168
+    },
+    "X1-H": {
+      "kind": "block",
+      "feeder": "X1",
+      "kva": 360,
+      "customers": 144
+    },
+    "X2-A": {
+      "kind": "block",
+      "feeder": "X2",
+      "kva": 880,
+      "customers": 352
+    },
+    "X2-B": {
+      "kind": "block",
+      "feeder": "X2",
+      "kva": 660,
+      "customers": 264
+    },
+    "X2-C": {
+      "kind": "block",
+      "feeder": "X2",
+      "kva": 540,
+      "customers": 216
+    },
+    "X2-D": {
+      "kind": "block",
+      "feeder": "X2",
+      "kva": 600,
+      "customers": 240
+    },
+    "X2-E": {
+      "kind": "block",
+      "feeder": "X2",
+      "kva": 460,
+      "customers": 184
+    },
+    "X2-F": {
+      "kind": "block",
+      "feeder": "X2",
+      "kva": 380,
+      "customers": 152
+    },
+    "X2-G": {
+      "kind": "block",
+      "feeder": "X2",
+      "kva": 320,
+      "customers": 128
+    },
+    "X3-A": {
+      "kind": "block",
+      "feeder": "X3",
+      "kva": 560,
+      "customers": 224
+    },
+    "X3-B": {
+      "kind": "block",
+      "feeder": "X3",
+      "kva": 440,
+      "customers": 176
+    },
+    "X3-C": {
+      "kind": "block",
+      "feeder": "X3",
+      "kva": 360,
+      "customers": 144
+    },
+    "A1-a": {
+      "kind": "block",
+      "feeder": "A1",
+      "kva": 1150,
+      "customers": 460
+    },
+    "A1-b": {
+      "kind": "block",
+      "feeder": "A1",
+      "kva": 320,
+      "customers": 128
+    },
+    "A2-a": {
+      "kind": "block",
+      "feeder": "A2",
+      "kva": 980,
+      "customers": 392
+    },
+    "A2-b": {
+      "kind": "block",
+      "feeder": "A2",
+      "kva": 300,
+      "customers": 120
+    },
+    "B1-a": {
+      "kind": "block",
+      "feeder": "B1",
+      "kva": 1250,
+      "customers": 500
+    },
+    "B1-b": {
+      "kind": "block",
+      "feeder": "B1",
+      "kva": 380,
+      "customers": 152
+    },
+    "B1-c": {
+      "kind": "block",
+      "feeder": "B1",
+      "kva": 300,
+      "customers": 120
+    },
+    "C1-a": {
+      "kind": "block",
+      "feeder": "C1",
+      "kva": 900,
+      "customers": 360
+    },
+    "C1-b": {
+      "kind": "block",
+      "feeder": "C1",
+      "kva": 340,
+      "customers": 136
+    },
+    "D1-a": {
+      "kind": "block",
+      "feeder": "D1",
+      "kva": 820,
+      "customers": 328
+    },
+    "D1-b": {
+      "kind": "block",
+      "feeder": "D1",
+      "kva": 280,
+      "customers": 112
+    },
+    "XR-23": {
+      "kind": "block",
+      "feeder": "X2",
+      "kva": 120,
+      "customers": 0
+    },
+    "AR-12": {
+      "kind": "block",
+      "feeder": "A1",
+      "kva": 100,
+      "customers": 0
+    }
+  },
+  "edges": {
+    "CB-X1": {
+      "u": "SUB-X",
+      "v": "X1-A",
+      "amp": 460,
+      "closed": 1,
+      "switchable": true,
+      "remote": true,
+      "kind": "cb"
+    },
+    "CB-B1": {
+      "u": "SUB-B",
+      "v": "B1-a",
+      "amp": 520,
+      "closed": 1,
+      "switchable": true,
+      "remote": true,
+      "kind": "cb"
+    },
+    "CB-C1": {
+      "u": "SUB-C",
+      "v": "C1-a",
+      "amp": 420,
+      "closed": 1,
+      "switchable": true,
+      "remote": true,
+      "kind": "cb"
+    },
+    "CB-D1": {
+      "u": "SUB-D",
+      "v": "D1-a",
+      "amp": 400,
+      "closed": 1,
+      "switchable": true,
+      "remote": true,
+      "kind": "cb"
+    },
+    "S-X1-AB": {
+      "u": "X1-A",
+      "v": "X1-B",
+      "amp": 320,
+      "closed": 1,
+      "switchable": true,
+      "remote": true,
+      "kind": "switch"
+    },
+    "S-X1-BC": {
+      "u": "X1-B",
+      "v": "X1-C",
+      "amp": 280,
+      "closed": 1,
+      "switchable": true,
+      "remote": false,
+      "kind": "switch"
+    },
+    "S-X1-AD": {
+      "u": "X1-A",
+      "v": "X1-D",
+      "amp": 320,
+      "closed": 1,
+      "switchable": true,
+      "remote": false,
+      "kind": "switch"
+    },
+    "S-X1-DE": {
+      "u": "X1-D",
+      "v": "X1-E",
+      "amp": 260,
+      "closed": 1,
+      "switchable": true,
+      "remote": true,
+      "kind": "switch"
+    },
+    "R-X1-CF": {
+      "u": "X1-C",
+      "v": "X1-F",
+      "amp": 240,
+      "closed": 0,
+      "switchable": true,
+      "remote": true,
+      "kind": "ring"
+    },
+    "S-X1-EF": {
+      "u": "X1-E",
+      "v": "X1-F",
+      "amp": 240,
+      "closed": 1,
+      "switchable": true,
+      "remote": false,
+      "kind": "switch"
+    },
+    "S-X1-FG": {
+      "u": "X1-F",
+      "v": "X1-G",
+      "amp": 220,
+      "closed": 1,
+      "switchable": true,
+      "remote": true,
+      "kind": "switch"
+    },
+    "R-X1-GH": {
+      "u": "X1-G",
+      "v": "X1-H",
+      "amp": 200,
+      "closed": 0,
+      "switchable": true,
+      "remote": false,
+      "kind": "ring"
+    },
+    "S-X1-BH": {
+      "u": "X1-B",
+      "v": "X1-H",
+      "amp": 200,
+      "closed": 1,
+      "switchable": true,
+      "remote": true,
+      "kind": "switch"
+    },
+    "S-X2-AB": {
+      "u": "X2-A",
+      "v": "X2-B",
+      "amp": 340,
+      "closed": 1,
+      "switchable": true,
+      "remote": true,
+      "kind": "switch"
+    },
+    "S-X2-BC": {
+      "u": "X2-B",
+      "v": "X2-C",
+      "amp": 260,
+      "closed": 1,
+      "switchable": true,
+      "remote": false,
+      "kind": "switch"
+    },
+    "S-X2-AD": {
+      "u": "X2-A",
+      "v": "X2-D",
+      "amp": 320,
+      "closed": 1,
+      "switchable": true,
+      "remote": true,
+      "kind": "switch"
+    },
+    "S-X2-DE": {
+      "u": "X2-D",
+      "v": "X2-E",
+      "amp": 240,
+      "closed": 1,
+      "switchable": true,
+      "remote": false,
+      "kind": "switch"
+    },
+    "S-X2-EF": {
+      "u": "X2-E",
+      "v": "X2-F",
+      "amp": 220,
+      "closed": 1,
+      "switchable": true,
+      "remote": true,
+      "kind": "switch"
+    },
+    "S-X2-EG": {
+      "u": "X2-E",
+      "v": "X2-G",
+      "amp": 200,
+      "closed": 1,
+      "switchable": false,
+      "remote": false,
+      "kind": "cable"
+    },
+    "S-X3-AB": {
+      "u": "X3-A",
+      "v": "X3-B",
+      "amp": 260,
+      "closed": 1,
+      "switchable": true,
+      "remote": true,
+      "kind": "switch"
+    },
+    "S-X3-BC": {
+      "u": "X3-B",
+      "v": "X3-C",
+      "amp": 200,
+      "closed": 1,
+      "switchable": false,
+      "remote": false,
+      "kind": "cable"
+    },
+    "S-A1-ab": {
+      "u": "A1-a",
+      "v": "A1-b",
+      "amp": 240,
+      "closed": 1,
+      "switchable": false,
+      "remote": false,
+      "kind": "cable"
+    },
+    "S-A2-ab": {
+      "u": "A2-a",
+      "v": "A2-b",
+      "amp": 240,
+      "closed": 1,
+      "switchable": false,
+      "remote": false,
+      "kind": "cable"
+    },
+    "S-B1-ab": {
+      "u": "B1-a",
+      "v": "B1-b",
+      "amp": 300,
+      "closed": 1,
+      "switchable": false,
+      "remote": false,
+      "kind": "cable"
+    },
+    "S-B1-bc": {
+      "u": "B1-b",
+      "v": "B1-c",
+      "amp": 240,
+      "closed": 1,
+      "switchable": false,
+      "remote": false,
+      "kind": "cable"
+    },
+    "S-C1-ab": {
+      "u": "C1-a",
+      "v": "C1-b",
+      "amp": 260,
+      "closed": 1,
+      "switchable": false,
+      "remote": false,
+      "kind": "cable"
+    },
+    "S-D1-ab": {
+      "u": "D1-a",
+      "v": "D1-b",
+      "amp": 240,
+      "closed": 1,
+      "switchable": false,
+      "remote": false,
+      "kind": "cable"
+    },
+    "T1": {
+      "u": "A1-b",
+      "v": "X1-C",
+      "amp": 240,
+      "closed": 0,
+      "switchable": true,
+      "remote": true,
+      "kind": "tie"
+    },
+    "T2": {
+      "u": "A2-b",
+      "v": "X1-H",
+      "amp": 200,
+      "closed": 0,
+      "switchable": true,
+      "remote": false,
+      "kind": "tie"
+    },
+    "T3": {
+      "u": "B1-b",
+      "v": "X1-E",
+      "amp": 220,
+      "closed": 0,
+      "switchable": true,
+      "remote": true,
+      "kind": "tie"
+    },
+    "T4": {
+      "u": "B1-c",
+      "v": "X2-C",
+      "amp": 220,
+      "closed": 0,
+      "switchable": true,
+      "remote": true,
+      "kind": "tie"
+    },
+    "T5": {
+      "u": "B1-a",
+      "v": "X2-B",
+      "amp": 240,
+      "closed": 0,
+      "switchable": true,
+      "remote": false,
+      "kind": "tie"
+    },
+    "T6": {
+      "u": "C1-b",
+      "v": "X2-F",
+      "amp": 200,
+      "closed": 0,
+      "switchable": true,
+      "remote": true,
+      "kind": "tie"
+    },
+    "T7": {
+      "u": "D1-b",
+      "v": "X3-C",
+      "amp": 200,
+      "closed": 0,
+      "switchable": true,
+      "remote": true,
+      "kind": "tie"
+    },
+    "CB-X23": {
+      "u": "SUB-X",
+      "v": "XR-23",
+      "amp": 720,
+      "closed": 1,
+      "switchable": true,
+      "remote": true,
+      "kind": "cb"
+    },
+    "S-X23-2": {
+      "u": "XR-23",
+      "v": "X2-A",
+      "amp": 460,
+      "closed": 1,
+      "switchable": true,
+      "remote": true,
+      "kind": "switch"
+    },
+    "S-X23-3": {
+      "u": "XR-23",
+      "v": "X3-A",
+      "amp": 360,
+      "closed": 1,
+      "switchable": true,
+      "remote": true,
+      "kind": "switch"
+    },
+    "CB-A12": {
+      "u": "SUB-A",
+      "v": "AR-12",
+      "amp": 720,
+      "closed": 1,
+      "switchable": true,
+      "remote": true,
+      "kind": "cb"
+    },
+    "S-A12-1": {
+      "u": "AR-12",
+      "v": "A1-a",
+      "amp": 460,
+      "closed": 1,
+      "switchable": true,
+      "remote": true,
+      "kind": "switch"
+    },
+    "S-A12-2": {
+      "u": "AR-12",
+      "v": "A2-a",
+      "amp": 460,
+      "closed": 1,
+      "switchable": true,
+      "remote": true,
+      "kind": "switch"
+    }
+  },
+  "feeders": {
+    "X1": {
+      "cb": "CB-X1",
+      "root": "X1-A"
+    },
+    "X2": {
+      "cb": "CB-X23",
+      "root": "X2-A"
+    },
+    "X3": {
+      "cb": "CB-X23",
+      "root": "X3-A"
+    },
+    "A1": {
+      "cb": "CB-A12",
+      "root": "A1-a"
+    },
+    "A2": {
+      "cb": "CB-A12",
+      "root": "A2-a"
+    },
+    "B1": {
+      "cb": "CB-B1",
+      "root": "B1-a"
+    },
+    "C1": {
+      "cb": "CB-C1",
+      "root": "C1-a"
+    },
+    "D1": {
+      "cb": "CB-D1",
+      "root": "D1-a"
+    }
+  },
+  "feeder_rtus": {
+    "X1": [
+      {
+        "switch": "S-X1-AD",
+        "downstream": [
+          "X1-D",
+          "X1-E",
+          "X1-F",
+          "X1-G",
+          "X1-H"
+        ]
+      },
+      {
+        "switch": "S-X1-FG",
+        "downstream": [
+          "X1-G"
+        ]
+      }
+    ],
+    "X2": [
+      {
+        "switch": "S-X2-AD",
+        "downstream": [
+          "X2-D",
+          "X2-E",
+          "X2-F",
+          "X2-G"
+        ]
+      },
+      {
+        "switch": "S-X2-DE",
+        "downstream": [
+          "X2-E",
+          "X2-F",
+          "X2-G"
+        ]
+      }
+    ]
+  },
+  "feeder_peak_target": {
+    "X1": 420.0,
+    "X2": 400.0,
+    "X3": 300.0,
+    "A1": 250.0,
+    "A2": 210.0,
+    "B1": 320.0,
+    "C1": 220.0,
+    "D1": 200.0
+  },
+  "solver_params": {
+    "action_cost_remote": 1.0,
+    "action_cost_manual": 5.0,
+    "ring_relocate_penalty": 2.0,
+    "restore_weight": 100.0
+  },
+  "diagram": {
+    "figsize": [
+      24,
+      14
+    ],
+    "xlim": [
+      0.0,
+      21.0
+    ],
+    "ylim": [
+      2.2,
+      14.2
+    ],
+    "feeder_colors": {
+      "A1": "#1a78c2",
+      "A2": "#2e9bd6",
+      "B1": "#27ae60",
+      "C1": "#9b59b6",
+      "D1": "#e67e22",
+      "X1": "#e0b000",
+      "X2": "#cc3333",
+      "X3": "#d65f9a"
+    },
+    "pos": {
+      "SUB-A": [
+        1.8,
+        13.2
+      ],
+      "SUB-B": [
+        5.0,
+        13.2
+      ],
+      "SUB-C": [
+        7.6,
+        13.2
+      ],
+      "SUB-D": [
+        9.6,
+        13.2
+      ],
+      "SUB-X": [
+        15.2,
+        13.2
+      ],
+      "A1-a": [
+        1.2,
+        11.4
+      ],
+      "A1-b": [
+        1.2,
+        9.6
+      ],
+      "A2-a": [
+        2.6,
+        11.4
+      ],
+      "A2-b": [
+        2.6,
+        9.6
+      ],
+      "AR-12": [
+        1.9,
+        12.5
+      ],
+      "B1-a": [
+        5.0,
+        11.4
+      ],
+      "B1-b": [
+        5.0,
+        9.6
+      ],
+      "B1-c": [
+        5.0,
+        7.8
+      ],
+      "C1-a": [
+        7.6,
+        11.4
+      ],
+      "C1-b": [
+        7.6,
+        9.6
+      ],
+      "D1-a": [
+        9.6,
+        11.4
+      ],
+      "D1-b": [
+        9.6,
+        9.6
+      ],
+      "XR-23": [
+        18.0,
+        12.5
+      ],
+      "X1-A": [
+        13.4,
+        11.4
+      ],
+      "X1-B": [
+        12.4,
+        9.8
+      ],
+      "X1-C": [
+        12.4,
+        8.2
+      ],
+      "X1-D": [
+        14.4,
+        9.8
+      ],
+      "X1-E": [
+        14.4,
+        8.2
+      ],
+      "X1-F": [
+        13.4,
+        6.6
+      ],
+      "X1-G": [
+        13.4,
+        5.0
+      ],
+      "X1-H": [
+        11.6,
+        6.6
+      ],
+      "X2-A": [
+        16.4,
+        11.4
+      ],
+      "X2-B": [
+        16.4,
+        9.8
+      ],
+      "X2-C": [
+        16.4,
+        8.2
+      ],
+      "X2-D": [
+        17.8,
+        9.8
+      ],
+      "X2-E": [
+        17.8,
+        8.2
+      ],
+      "X2-F": [
+        17.0,
+        6.6
+      ],
+      "X2-G": [
+        18.6,
+        6.6
+      ],
+      "X3-A": [
+        19.6,
+        11.4
+      ],
+      "X3-B": [
+        19.6,
+        9.8
+      ],
+      "X3-C": [
+        19.6,
+        8.2
+      ]
+    },
+    "routes": {
+      "CB-X1": [
+        [
+          15.2,
+          13.2
+        ],
+        [
+          15.2,
+          11.4
+        ],
+        [
+          13.4,
+          11.4
+        ]
+      ],
+      "CB-B1": [
+        [
+          5.0,
+          13.2
+        ],
+        [
+          5.0,
+          11.4
+        ]
+      ],
+      "CB-C1": [
+        [
+          7.6,
+          13.2
+        ],
+        [
+          7.6,
+          11.4
+        ]
+      ],
+      "CB-D1": [
+        [
+          9.6,
+          13.2
+        ],
+        [
+          9.6,
+          11.4
+        ]
+      ],
+      "S-X1-AB": [
+        [
+          13.4,
+          11.4
+        ],
+        [
+          12.4,
+          11.4
+        ],
+        [
+          12.4,
+          9.8
+        ]
+      ],
+      "S-X1-BC": [
+        [
+          12.4,
+          9.8
+        ],
+        [
+          12.4,
+          8.2
+        ]
+      ],
+      "S-X1-AD": [
+        [
+          13.4,
+          11.4
+        ],
+        [
+          14.4,
+          11.4
+        ],
+        [
+          14.4,
+          9.8
+        ]
+      ],
+      "S-X1-DE": [
+        [
+          14.4,
+          9.8
+        ],
+        [
+          14.4,
+          8.2
+        ]
+      ],
+      "R-X1-CF": [
+        [
+          12.4,
+          8.2
+        ],
+        [
+          12.4,
+          6.6
+        ],
+        [
+          13.4,
+          6.6
+        ]
+      ],
+      "S-X1-EF": [
+        [
+          14.4,
+          8.2
+        ],
+        [
+          14.4,
+          6.6
+        ],
+        [
+          13.4,
+          6.6
+        ]
+      ],
+      "S-X1-FG": [
+        [
+          13.4,
+          6.6
+        ],
+        [
+          13.4,
+          5.0
+        ]
+      ],
+      "R-X1-GH": [
+        [
+          13.4,
+          5.0
+        ],
+        [
+          11.6,
+          5.0
+        ],
+        [
+          11.6,
+          6.6
+        ]
+      ],
+      "S-X1-BH": [
+        [
+          12.4,
+          9.8
+        ],
+        [
+          12.4,
+          6.6
+        ],
+        [
+          11.6,
+          6.6
+        ]
+      ],
+      "S-X2-AB": [
+        [
+          16.4,
+          11.4
+        ],
+        [
+          16.4,
+          9.8
+        ]
+      ],
+      "S-X2-BC": [
+        [
+          16.4,
+          9.8
+        ],
+        [
+          16.4,
+          8.2
+        ]
+      ],
+      "S-X2-AD": [
+        [
+          16.4,
+          11.4
+        ],
+        [
+          17.8,
+          11.4
+        ],
+        [
+          17.8,
+          9.8
+        ]
+      ],
+      "S-X2-DE": [
+        [
+          17.8,
+          9.8
+        ],
+        [
+          17.8,
+          8.2
+        ]
+      ],
+      "S-X2-EF": [
+        [
+          17.8,
+          8.2
+        ],
+        [
+          17.8,
+          6.6
+        ],
+        [
+          17.0,
+          6.6
+        ]
+      ],
+      "S-X2-EG": [
+        [
+          17.8,
+          8.2
+        ],
+        [
+          17.8,
+          6.6
+        ],
+        [
+          18.6,
+          6.6
+        ]
+      ],
+      "S-X3-AB": [
+        [
+          19.6,
+          11.4
+        ],
+        [
+          19.6,
+          9.8
+        ]
+      ],
+      "S-X3-BC": [
+        [
+          19.6,
+          9.8
+        ],
+        [
+          19.6,
+          8.2
+        ]
+      ],
+      "S-A1-ab": [
+        [
+          1.2,
+          11.4
+        ],
+        [
+          1.2,
+          9.6
+        ]
+      ],
+      "S-A2-ab": [
+        [
+          2.6,
+          11.4
+        ],
+        [
+          2.6,
+          9.6
+        ]
+      ],
+      "S-B1-ab": [
+        [
+          5.0,
+          11.4
+        ],
+        [
+          5.0,
+          9.6
+        ]
+      ],
+      "S-B1-bc": [
+        [
+          5.0,
+          9.6
+        ],
+        [
+          5.0,
+          7.8
+        ]
+      ],
+      "S-C1-ab": [
+        [
+          7.6,
+          11.4
+        ],
+        [
+          7.6,
+          9.6
+        ]
+      ],
+      "S-D1-ab": [
+        [
+          9.6,
+          11.4
+        ],
+        [
+          9.6,
+          9.6
+        ]
+      ],
+      "T1": [
+        [
+          1.2,
+          9.6
+        ],
+        [
+          1.2,
+          4.4
+        ],
+        [
+          12.4,
+          4.4
+        ],
+        [
+          12.4,
+          8.2
+        ]
+      ],
+      "T2": [
+        [
+          2.6,
+          9.6
+        ],
+        [
+          2.6,
+          3.6
+        ],
+        [
+          11.6,
+          3.6
+        ],
+        [
+          11.6,
+          6.6
+        ]
+      ],
+      "T3": [
+        [
+          5.0,
+          9.6
+        ],
+        [
+          5.0,
+          4.0
+        ],
+        [
+          14.4,
+          4.0
+        ],
+        [
+          14.4,
+          8.2
+        ]
+      ],
+      "T4": [
+        [
+          5.0,
+          7.8
+        ],
+        [
+          6.2,
+          7.8
+        ],
+        [
+          6.2,
+          3.2
+        ],
+        [
+          16.4,
+          3.2
+        ],
+        [
+          16.4,
+          8.2
+        ]
+      ],
+      "T5": [
+        [
+          5.0,
+          11.4
+        ],
+        [
+          4.4,
+          11.4
+        ],
+        [
+          4.4,
+          4.8
+        ],
+        [
+          16.4,
+          4.8
+        ],
+        [
+          16.4,
+          9.8
+        ]
+      ],
+      "T6": [
+        [
+          7.6,
+          9.6
+        ],
+        [
+          8.2,
+          9.6
+        ],
+        [
+          8.2,
+          4.8
+        ],
+        [
+          17.0,
+          4.8
+        ],
+        [
+          17.0,
+          6.6
+        ]
+      ],
+      "T7": [
+        [
+          9.6,
+          9.6
+        ],
+        [
+          10.6,
+          9.6
+        ],
+        [
+          10.6,
+          3.0
+        ],
+        [
+          19.6,
+          3.0
+        ],
+        [
+          19.6,
+          8.2
+        ]
+      ],
+      "CB-X23": [
+        [
+          15.2,
+          13.2
+        ],
+        [
+          15.2,
+          12.5
+        ],
+        [
+          18.0,
+          12.5
+        ]
+      ],
+      "S-X23-2": [
+        [
+          18.0,
+          12.5
+        ],
+        [
+          18.0,
+          11.4
+        ],
+        [
+          16.4,
+          11.4
+        ]
+      ],
+      "S-X23-3": [
+        [
+          18.0,
+          12.5
+        ],
+        [
+          18.0,
+          11.4
+        ],
+        [
+          19.6,
+          11.4
+        ]
+      ],
+      "CB-A12": [
+        [
+          1.8,
+          13.2
+        ],
+        [
+          1.8,
+          12.5
+        ],
+        [
+          1.9,
+          12.5
+        ]
+      ],
+      "S-A12-1": [
+        [
+          1.9,
+          12.5
+        ],
+        [
+          1.9,
+          11.4
+        ],
+        [
+          1.2,
+          11.4
+        ]
+      ],
+      "S-A12-2": [
+        [
+          1.9,
+          12.5
+        ],
+        [
+          1.9,
+          11.4
+        ],
+        [
+          2.6,
+          11.4
+        ]
+      ]
+    },
+    "symbol_pos": {
+      "CB-X1": [
+        15.2,
+        11.4
+      ],
+      "CB-B1": [
+        5.0,
+        12.3
+      ],
+      "CB-C1": [
+        7.6,
+        12.3
+      ],
+      "CB-D1": [
+        9.6,
+        12.3
+      ],
+      "S-X1-AB": [
+        12.4,
+        11.100000000000001
+      ],
+      "S-X1-BC": [
+        12.4,
+        9.0
+      ],
+      "S-X1-AD": [
+        14.4,
+        11.100000000000001
+      ],
+      "S-X1-DE": [
+        14.4,
+        9.0
+      ],
+      "R-X1-CF": [
+        12.4,
+        6.8999999999999995
+      ],
+      "S-X1-EF": [
+        14.4,
+        6.8999999999999995
+      ],
+      "S-X1-FG": [
+        13.4,
+        5.8
+      ],
+      "R-X1-GH": [
+        11.7,
+        5.0
+      ],
+      "S-X1-BH": [
+        12.4,
+        7.8
+      ],
+      "S-X2-AB": [
+        16.4,
+        10.600000000000001
+      ],
+      "S-X2-BC": [
+        16.4,
+        9.0
+      ],
+      "S-X2-AD": [
+        17.8,
+        11.3
+      ],
+      "S-X2-DE": [
+        17.8,
+        9.0
+      ],
+      "S-X2-EF": [
+        17.8,
+        6.999999999999999
+      ],
+      "S-X3-AB": [
+        19.6,
+        10.600000000000001
+      ],
+      "T1": [
+        6.099999999999999,
+        4.4
+      ],
+      "T2": [
+        5.6,
+        3.6
+      ],
+      "T3": [
+        9.0,
+        4.0
+      ],
+      "T4": [
+        10.9,
+        3.2
+      ],
+      "T5": [
+        9.3,
+        4.8
+      ],
+      "T6": [
+        10.8,
+        4.8
+      ],
+      "T7": [
+        13.9,
+        3.0
+      ],
+      "CB-X23": [
+        16.25,
+        12.5
+      ],
+      "S-X23-2": [
+        17.75,
+        11.4
+      ],
+      "S-X23-3": [
+        18.25,
+        11.4
+      ],
+      "CB-A12": [
+        1.8,
+        12.799999999999999
+      ],
+      "S-A12-1": [
+        1.9,
+        11.6
+      ],
+      "S-A12-2": [
+        1.9,
+        11.6
+      ]
+    },
+    "hops": {}
+  }
+}
