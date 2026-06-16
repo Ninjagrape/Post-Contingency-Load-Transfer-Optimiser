@@ -134,11 +134,16 @@ def _fan_ports(node, incident, side, pos):
 
 def _ortho(p0, p1):
     """Two-segment Manhattan route between two ports (vertical then horizontal,
-    via an elbow).  Good enough for tree edges between adjacent rows."""
+    via an elbow).  Near-aligned ports snap to a single straight run so a
+    stacked tree edge doesn't kink."""
     (x0, y0), (x1, y1) = p0, p1
-    if abs(x0 - x1) < HOP_EPS or abs(y0 - y1) < HOP_EPS:
-        return [(x0, y0), (x1, y1)]
-    # elbow at (x0, y1): drop vertically from the upper port, then across
+    SNAP = 2 * NODE_R * PORT_SPREAD + HOP_EPS   # within a port-fan's spread
+    if abs(x0 - x1) < SNAP:
+        xm = (x0 + x1) / 2.0
+        return [(xm, y0), (xm, y1)]
+    if abs(y0 - y1) < SNAP:
+        ym = (y0 + y1) / 2.0
+        return [(x0, ym), (x1, ym)]
     if y0 > y1:
         return [(x0, y0), (x0, y1), (x1, y1)]
     return [(x0, y0), (x1, y0), (x1, y1)]
@@ -247,13 +252,16 @@ def auto_layout(nodes, edges, feeders, outage_substation, base_diagram=None):
         for node in (ed["u"], ed["v"]):
             key = round(_endpoint_x(eid, node) / (NODE_R * 1.5))
             groups.setdefault(key, []).append((eid, node))
+    
     for key, members in groups.items():
-        # stable order so the offset assignment is deterministic
         members.sort(key=lambda en: (en[0], en[1]))
         m = len(members)
         for i, (eid, node) in enumerate(members):
-            t = 0.0 if m == 1 else (i / (m - 1) - 0.5)   # -0.5..0.5
-            corridor[(eid, node)] = _endpoint_x(eid, node) + t * CORRIDOR_SPREAD
+            if m == 1:
+                corridor[(eid, node)] = pos[node][0]   # center: square corner
+                continue
+            t = i / (m - 1) - 0.5
+            corridor[(eid, node)] = pos[node][0] + t * CORRIDOR_SPREAD
 
     lane_y = {}
     for i, eid in enumerate(loop_ids):
@@ -265,7 +273,9 @@ def auto_layout(nodes, edges, feeders, outage_substation, base_diagram=None):
         dvx = corridor[(eid, ed["v"])]
         ly = lane_y[eid]
         # port -> short jog to corridor x -> drop -> lane -> drop -> jog -> port
-        routes[eid] = [pu, (dux, pu[1]), (dux, ly), (dvx, ly), (dvx, pv[1]), pv]
+        uy, vy = pos[ed["u"]][1], pos[ed["v"]][1]
+        routes[eid] = [pu, (pu[0], uy), (dux, uy), (dux, ly),
+                       (dvx, ly), (dvx, vy), (pv[0], vy), pv]
 
     # --- hops: where a loop lane's horizontal run crosses a vertical wire ---
     hops = {}
@@ -301,13 +311,27 @@ def auto_layout(nodes, edges, feeders, outage_substation, base_diagram=None):
             tee_pos[n] = (float(pos[n][0]), float(pos[n][1]))
 
     # --- symbol_pos: midpoint of each switchable edge's route ---------------
+    def _polyline_midpoint(pts):
+        segs = [((pts[i], pts[i + 1]),
+                 ((pts[i + 1][0] - pts[i][0]) ** 2 +
+                  (pts[i + 1][1] - pts[i][1]) ** 2) ** 0.5)
+                for i in range(len(pts) - 1)]
+        total = sum(L for _, L in segs)
+        if total < HOP_EPS:
+            return pts[0]
+        half, run = total / 2.0, 0.0
+        for (a, b), L in segs:
+            if run + L >= half:
+                f = (half - run) / L if L > HOP_EPS else 0.0
+                return (a[0] + f * (b[0] - a[0]), a[1] + f * (b[1] - a[1]))
+            run += L
+        return pts[-1]
+
     symbol_pos = {}
     for eid, ed in edges.items():
         if not ed.get("switchable"):
             continue
-        pts = routes[eid]
-        mid = pts[len(pts) // 2]
-        symbol_pos[eid] = (float(mid[0]), float(mid[1]))
+        symbol_pos[eid] = tuple(float(c) for c in _polyline_midpoint(routes[eid]))
 
     # --- shift y so the whole diagram sits in positive coordinates ----------
     # Buses are at TOP_Y (0) and the tree grows DOWN into negative y, with tie
