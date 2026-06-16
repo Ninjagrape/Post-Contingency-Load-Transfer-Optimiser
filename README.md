@@ -15,7 +15,7 @@ This tool automates that process:
 3. **Allocates** feeder-head current down to individual load blocks using a tree-aware approach: RTU-measured branch flows are anchored first; the remaining load is spread by transformer kVA across unmeasured blocks only
 4. **Solves a MILP** to maximize restored customers while penalizing switching actions and enforcing thermal limits and connectivity-flow radiality (necessary and sufficient, handles meshed topologies that defeat a simple edge-count constraint)
 5. **Emits** an ordered switching plan with independent state verification and single-tie overload warnings
-6. **Renders** an ADMS-style one-line network diagram showing switch states and load before and after restoration
+6. **Renders** an ADMS-style one-line network diagram showing switch states and load before and after restoration. Diagram geometry is derived automatically from the network topology, so scenario files describe connectivity only and need no hand-placed coordinates.
 
 ## Usage
 
@@ -52,7 +52,7 @@ Step 5: CLOSE  T2         (MANUAL)  backfeed X1-D, X1-E, X1-F from SUB-B via B1 
 ...
 
 --- OPEN/CLOSE PAIRING (radial integrity) ---
-  CLOSE T1 is bounded by OPEN (none – full feeder segment)
+  CLOSE T1 is bounded by OPEN (none -- full feeder segment)
   CLOSE T2 is bounded by OPEN S-X1-BC
 
 --- VERIFICATION ---
@@ -79,10 +79,10 @@ The built-in network is defined in `scenarios/baseline.json` and represents thre
 | `SUB-A`, `SUB-B` | Healthy source substations |
 | `SUB-X` | The outaged substation (two CBs) |
 | `X1` | De-energized ring+tee feeder: branches at X1-A into two legs that rejoin at X1-F via normally-open ring point R-X1 |
-| `X2` | De-energized tee feeder: main line X2-A→X2-B with solid-cable lateral to X2-C |
+| `X2` | De-energized tee feeder: main line X2-A->X2-B with solid-cable lateral to X2-C |
 | `A1`, `A2` | Healthy feeders from SUB-A available for backfeed |
 | `B1` | Healthy feeder from SUB-B available for backfeed |
-| Tie switches `T1–T4` | Normally-open backfeed paths (multiple per outage feeder) |
+| Tie switches `T1-T4` | Normally-open backfeed paths (multiple per outage feeder) |
 | Sectionalizing switches | Mid-feeder isolation points (remote or manual) |
 | Ring switch `R-X1` | Normally-open ring point; planner may relocate at an extra penalty cost |
 
@@ -101,7 +101,7 @@ For every switchable device in the network the optimiser makes a binary choice: 
 The optimiser scores every possible combination of switch positions using a single number:
 
 ```
-score = (customers restored × 100) − (switching effort cost)
+score = (customers restored x 100) - (switching effort cost)
 ```
 
 Each customer on a restored block adds 100 points to the score. Each switching action subtracts a small cost (1 for a remote SCADA click, 5 for a manual truck roll, with a further 2 added if a ring open-point has to be relocated). The 100-to-1 ratio means the optimiser will almost always prefer to do an extra truck roll rather than leave customers dark; the switching costs are only tie-breakers when restoration counts are equal.
@@ -123,7 +123,7 @@ A distribution network is normally operated radially, meaning power flows from a
 
 After backfeed switching the network will have multiple healthy substations each feeding a tree of restored blocks. Critically, those trees must not join up into a loop, which would mean two substations are linked through the field network, which defeats protection in the same way.
 
-A naive way to enforce this would be to count edges and nodes: a tree with N nodes has exactly N−1 edges, so you could require `closed edges = live nodes − number of healthy sources`. That works on simple networks, but on a meshed topology (one with ring feeders or multiple tie paths between the same pair of substations) you can construct a switch configuration that satisfies the edge count but contains a loop. The edge count is a necessary condition for a tree but not a sufficient one.
+A naive way to enforce this would be to count edges and nodes: a tree with N nodes has exactly N-1 edges, so you could require `closed edges = live nodes - number of healthy sources`. That works on simple networks, but on a meshed topology (one with ring feeders or multiple tie paths between the same pair of substations) you can construct a switch configuration that satisfies the edge count but contains a loop. The edge count is a necessary condition for a tree but not a sufficient one.
 
 The tool uses a stronger method: it runs a **single-commodity connectivity flow** through the closed subgraph at the same time as the main optimisation. Imagine each healthy substation injecting imaginary "connectivity tokens" that can travel through closed switches. Each live load block must absorb exactly one token (no more, no less). If a block can't receive a token it's either disconnected (a problem) or it's sitting inside a loop where tokens are circling without reaching it cleanly (also a problem). Mathematically, a feasible token flow exists if and only if every live block is reachable from exactly one source, which is precisely the definition of a spanning forest. Combined with the edge-count rule, this is both necessary and sufficient: a configuration passes only if it is genuinely radial, with no hidden loops that slipped past the edge count.
 
@@ -151,18 +151,19 @@ The solver (CBC, bundled with PuLP) finds the globally optimal switch configurat
 - Kirchhoff's current law at every node
 - Thermal ratings on every edge (signed flow variable, both directions)
 - **Connectivity-flow radiality**: a single-commodity flow proves every live block reachable from a healthy source on the closed subgraph, necessary *and* sufficient, unlike the simple edge-count test which a meshed topology can defeat
-- Tree edge count: `|closed edges| = |live nodes| − |healthy buses|`
+- Tree edge count: `|closed edges| = |live nodes| - |healthy buses|`
 - No substation paralleling
 
 ## Network diagram
 
-Running the script automatically opens an ADMS-style one-line diagram of the post-switching state. You can also call `draw_network()` directly:
+Running the script automatically opens an ADMS-style one-line diagram of the post-switching state. The diagram's geometry (node positions, cable routing, switch-symbol placement, flyover hops) is computed from the topology by `auto_layout`, so scenario files carry no coordinates. You can also build a diagram and call `draw_network()` directly:
 
 ```python
 from offload_planner import (load_scenario, draw_network, solve_offload,
                               build_plan, allocate_block_loads, synthesize_year,
                               seasonal_max, FEEDERS, FEEDER_PEAK_TARGET,
-                              OUTAGE_SUBSTATION)
+                              OUTAGE_SUBSTATION, NODES, EDGES)
+from auto_layout import auto_layout
 
 sc = load_scenario("baseline")   # populates FEEDERS, OUTAGE_SUBSTATION, etc.
 
@@ -172,12 +173,21 @@ block_amps    = allocate_block_loads(peaks)
 sol           = solve_offload(block_amps, OUTAGE_SUBSTATION)
 opens, closes, G = build_plan(sol)
 
+# Build the layout from topology. If a scenario still carries a hand-tuned
+# `diagram` block it is used as-is; otherwise geometry is generated.
+diagram = sc.get("diagram")
+if not diagram or "pos" not in diagram:
+    diagram = auto_layout(NODES, EDGES, FEEDERS, OUTAGE_SUBSTATION,
+                          base_diagram=diagram)
+
 # Initial outage state (X feeders dark, ties open)
-draw_network(diagram=sc["diagram"])
+draw_network(diagram=diagram)
 
 # Post-switching restored state with per-block load annotations
-draw_network(sol=sol, block_amps=block_amps, diagram=sc["diagram"])
+draw_network(sol=sol, block_amps=block_amps, diagram=diagram)
 ```
+
+`auto_layout` lays each substation and the feeders hanging off it out as a tidy tree (sources on a top rail, feeders descending in columns), then routes tie and ring edges in separate horizontal lanes beneath the diagram. Every edge attaches to its own port on a node's perimeter and every tie gets its own lane, so wires never overlap even when several ties reach the same node.
 
 The diagram uses a dark canvas with orthogonal routing and feeder color-coding:
 
@@ -190,9 +200,9 @@ The diagram uses a dark canvas with orthogonal routing and feeder color-coding:
 | Solid feeder-colored line | Energized, closed switch or cable |
 | Dark gray line | De-energized section |
 | Dashed line | Tie switch or ring switch (normally open) |
-| ⌢ semicircle on a dashed line | Flyover crossing: the tie passes over a feeder segment it does not connect to |
-| ● filled circle on line | Switch closed |
-| × circled cross on line | Switch open |
+| semicircle on a dashed line | Flyover crossing: the tie passes over a feeder segment it does not connect to |
+| filled circle on line | Switch closed |
+| circled cross on line | Switch open |
 
 Requires `matplotlib` (optional; solver and plan output work without it).
 
@@ -215,13 +225,19 @@ PuLP ships with the CBC solver; no external solver installation is required.
 
 ## Adapting to a real network
 
-Create a new JSON file in the `scenarios/` directory (modelled on `scenarios/baseline.json`) and pass its name as the second argument. The file must contain:
+Create a new JSON file in the `scenarios/` directory (modelled on `scenarios/baseline.json`) and pass its name as the second argument. The file describes **connectivity and electrical parameters only**; all diagram geometry is generated automatically. It must contain:
 
 - **`nodes`**: a dict of node objects. Each entry has a `kind` field (`"bus"` for substations, `"block"` for load segments), a `feeder` label, and either `kva` (blocks, used as the load-allocation weight) or `headroom_amps` (buses).
-- **`edges`**: a dict of edge objects. Each entry defines `u`, `v`, `kind` (`"cb"`, `"cable"`, `"tie"`, or `"ring"`), `amp` (thermal rating), `closed` (normal state, 0 or 1), `switchable`, and `remote`.
-- **`feeders`**: a dict mapping each feeder name to its source CB (`cb`) and root block node (`root`). The topology is derived automatically from the graph, so no ordered block list is needed.
+- **`edges`**: a dict of edge objects. Each entry defines `u`, `v`, `kind` (`"cb"`, `"switch"`, `"cable"`, `"tie"`, or `"ring"`), `amp` (thermal rating), `closed` (normal state, 0 or 1), `switchable`, and `remote`.
+- **`feeders`**: a dict mapping each feeder name to its source CB (`cb`) and root block node (`root`). The topology is derived automatically from the graph, so no ordered block list is needed. The `root` is also where the auto-layout begins each feeder's tree, so it should be the feeder-head block nearest the substation.
 - **`feeder_rtus`** (optional): a list of RTU entries per feeder, each with a `switch` name and a list of `downstream` block names. More RTU entries improve load allocation accuracy.
 - **`feeder_peak_target`**: a dict mapping feeder names to their expected peak amps. Replace with values from real SCADA historian exports.
 - **`outage_substation`**: the bus node name that has gone offline.
 - **`solver_params`** (optional): overrides for `action_cost_remote` (default 1), `action_cost_manual` (default 5), `ring_relocate_penalty` (default 2), and `restore_weight` (default 100).
-- **`diagram`** (optional): layout data for `draw_network()` (`pos`, `routes`, `hops`, `symbol_pos`, `feeder_colors`, `figsize`, `xlim`, `ylim`).
+- **`name`**, **`description`** (optional): human-facing metadata, not consumed by the solver.
+
+### Diagram layout
+
+You do **not** need to provide any geometry. `auto_layout` produces node positions, orthogonal cable routes, switch-symbol positions, flyover hops, a feeder color palette, and figure extents directly from `nodes` and `edges`.
+
+If you want to override parts of the generated layout for one network (for example to pin a few nodes that lay out awkwardly, or to fix feeder colors), add an optional **`diagram`** block containing any of `pos` (a partial `{node: [x, y]}` map), `feeder_colors`, `figsize`, `xlim`, or `ylim`. These are merged into the generated layout: pinned nodes keep their coordinates, named feeders keep their colors, and everything else is still computed. A `diagram` block that already contains a full `pos` map for every node is used verbatim, which preserves any legacy hand-tuned scenarios.

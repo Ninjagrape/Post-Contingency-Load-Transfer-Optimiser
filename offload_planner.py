@@ -25,7 +25,9 @@ Pipeline:
      connectivity-flow radiality and thermal limits.
   5. Emit an ordered switching plan, flag over-loaded ties, and verify
      the final state independently.
-  6. Render an ADMS-style one-line diagram (requires matplotlib).
+  6. Render an ADMS-style one-line diagram (requires matplotlib).  Diagram
+     geometry is generated from topology by auto_layout when a scenario
+     carries no hand-tuned 'diagram' block.
 
 Dependencies: numpy, networkx, pulp (bundled CBC), matplotlib (optional).
 
@@ -423,8 +425,9 @@ def draw_network(sol=None, block_amps=None, diagram=None):
 
     sol        : result from solve_offload(); None shows the initial outage state.
     block_amps : block-name -> amps; annotates each load block when provided.
-    diagram    : diagram sub-dict from the loaded scenario (pos, routes, hops,
-                 symbol_pos, feeder_colors).  If None the diagram is skipped.
+    diagram    : diagram sub-dict (pos, routes, hops, symbol_pos, feeder_colors).
+                 Generate it with auto_layout() when a scenario has none.  If
+                 None the diagram is skipped.
 
     Tie and ring switches are drawn dashed.  Where a dashed tie line must cross
     a feeder segment it does not connect to, a semicircle flyover (hop) is drawn.
@@ -446,7 +449,7 @@ def draw_network(sol=None, block_amps=None, diagram=None):
     BG    = "#151525"
     HOP_R = 0.12
 
-    # ── Unpack diagram data from scenario ────────────────────────────────────
+    # ── Unpack diagram data ──────────────────────────────────────────────────
     POS           = {k: tuple(v) for k, v in diagram["pos"].items()}
     FEEDER_COLORS = diagram["feeder_colors"]
     ROUTES        = {k: [tuple(p) for p in v] for k, v in diagram["routes"].items()}
@@ -617,9 +620,10 @@ def draw_network(sol=None, block_amps=None, diagram=None):
         mlines.Line2D([0], [0], color="#888899", lw=2,
                       label="crossing — not a junction"),
     ]
-    leg = ax.legend(handles=leg_items, loc="lower left", fontsize=8,
-                    facecolor="#1e1e30", edgecolor="#444455", labelcolor="white",
-                    title="Legend", title_fontsize=8)
+    leg = ax.legend(handles=leg_items, loc="upper left",
+                    bbox_to_anchor=(1.01, 1), borderaxespad=0,
+                    fontsize=8, facecolor="#1e1e30", edgecolor="#444455",
+                    labelcolor="white", title="Legend", title_fontsize=8)
     leg.get_title().set_color("#ccccdd")
 
     mode = "Post-switching state" if sol else "Initial outage state"
@@ -716,8 +720,16 @@ def main(season="MAX", scenario="baseline"):
     print(f"\nSwitching effort: {len(opens)} open + {len(closes)} close "
           f"({n_remote} remote, {n_manual} manual)")
 
+    # Diagram geometry: use a scenario's hand-tuned 'diagram' block if it
+    # carries a full node-position map, otherwise generate it from topology.
+    diagram = sc.get("diagram")
+    if not diagram or "pos" not in diagram:
+        from auto_layout import auto_layout
+        diagram = auto_layout(NODES, EDGES, FEEDERS, OUTAGE_SUBSTATION,
+                              base_diagram=diagram)
+
     try:
-        draw_network(sol=sol, block_amps=block_amps, diagram=sc.get("diagram"))
+        draw_network(sol=sol, block_amps=block_amps, diagram=diagram)
     except ImportError:
         print("\n(Install matplotlib to view the network diagram: pip install matplotlib)")
 

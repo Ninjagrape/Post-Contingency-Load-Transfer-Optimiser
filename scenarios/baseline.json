@@ -1,9 +1,6 @@
 {
   "name": "baseline",
-  "description": "Three-substation baseline: SUB-X outaged (ring+tee X1, tee X2), SUB-A and SUB-B healthy. Multiple inter-substation tie points.",
-
   "outage_substation": "SUB-X",
-
   "nodes": {
     "SUB-X": {"kind": "bus", "headroom_amps": 900.0},
     "SUB-A": {"kind": "bus", "headroom_amps": 900.0},
@@ -23,7 +20,6 @@
     "B1-a":  {"kind": "block", "feeder": "B1", "kva": 1200, "customers": 480},
     "B1-b":  {"kind": "block", "feeder": "B1", "kva": 350,  "customers": 140}
   },
-
   "edges": {
     "CB-X1":   {"u": "SUB-X", "v": "X1-A", "amp": 420, "closed": 1, "switchable": true,  "remote": true,  "kind": "cb"},
     "CB-X2":   {"u": "SUB-X", "v": "X2-A", "amp": 420, "closed": 1, "switchable": true,  "remote": true,  "kind": "cb"},
@@ -45,7 +41,6 @@
     "T3":      {"u": "A2-a", "v": "X2-C", "amp": 240, "closed": 0, "switchable": true,  "remote": true,  "kind": "tie"},
     "T4":      {"u": "B1-b", "v": "X2-B", "amp": 200, "closed": 0, "switchable": true,  "remote": true,  "kind": "tie"}
   },
-
   "feeders": {
     "X1": {"cb": "CB-X1", "root": "X1-A"},
     "X2": {"cb": "CB-X2", "root": "X2-A"},
@@ -53,84 +48,10 @@
     "A2": {"cb": "CB-A2", "root": "A2-a"},
     "B1": {"cb": "CB-B1", "root": "B1-a"}
   },
-
   "feeder_rtus": {
     "X1": [{"switch": "S-X1-AD", "downstream": ["X1-D", "X1-E", "X1-F"]}],
     "X2": [{"switch": "S-X2-AB", "downstream": ["X2-B", "X2-C"]}]
   },
-
-  "feeder_peak_target": {
-    "X1": 360.0, "X2": 250.0,
-    "A1": 230.0, "A2": 150.0, "B1": 300.0
-  },
-
-  "solver_params": {
-    "action_cost_remote":    1.0,
-    "action_cost_manual":    5.0,
-    "ring_relocate_penalty": 2.0,
-    "restore_weight":        100.0
-  },
-
-  "diagram": {
-    "feeder_colors": {
-      "A1": "#1a78c2", "A2": "#2e86ab",
-      "B1": "#27ae60",
-      "X1": "#e07b00", "X2": "#cc3333"
-    },
-
-    "pos": {
-      "SUB-A": [1.5,  8.5],  "SUB-B": [5.5,  8.5],  "SUB-X": [10.5, 8.5],
-      "A1-a":  [1.5,  7.0],  "A1-b":  [1.5,  5.5],
-      "A2-a":  [3.0,  7.0],
-      "B1-a":  [5.5,  7.0],  "B1-b":  [5.5,  5.5],
-      "X1-A":  [9.5,  7.0],
-      "X1-B":  [8.5,  5.5],  "X1-C":  [8.5,  4.0],
-      "X1-D":  [10.5, 5.5],  "X1-E":  [10.5, 4.0],
-      "X1-F":  [9.5,  2.5],
-      "X2-A":  [12.0, 7.0],
-      "X2-B":  [12.0, 5.5],  "X2-C":  [13.0, 5.5]
-    },
-
-    "routes": {
-      "CB-A1":   [[1.5,  8.5], [1.5,  7.0]],
-      "CB-A2":   [[1.5,  8.5], [3.0,  8.5], [3.0,  7.0]],
-      "CB-B1":   [[5.5,  8.5], [5.5,  7.0]],
-      "CB-X1":   [[10.5, 8.5], [9.5,  8.5], [9.5,  7.0]],
-      "CB-X2":   [[10.5, 8.5], [12.0, 8.5], [12.0, 7.0]],
-      "S-A1-ab": [[1.5,  7.0], [1.5,  5.5]],
-      "S-B1-ab": [[5.5,  7.0], [5.5,  5.5]],
-      "S-X2-BC": [[12.0, 5.5], [13.0, 5.5]],
-      "S-X1-AB": [[9.5,  7.0], [8.5,  7.0], [8.5,  5.5]],
-      "S-X1-BC": [[8.5,  5.5], [8.5,  4.0]],
-      "S-X1-AD": [[9.5,  7.0], [10.5, 7.0], [10.5, 5.5]],
-      "S-X1-DE": [[10.5, 5.5], [10.5, 4.0]],
-      "S-X1-EF": [[10.5, 4.0], [10.5, 2.5], [9.5,  2.5]],
-      "R-X1":    [[8.5,  4.0], [8.5,  2.5], [9.5,  2.5]],
-      "S-X2-AB": [[12.0, 7.0], [12.0, 5.5]],
-      "T1":      [[1.5,  5.5], [1.5,  4.0], [8.5,  4.0]],
-      "T2":      [[5.5,  7.0], [7.0,  7.0], [7.0,  4.0], [10.5, 4.0]],
-      "T3":      [[3.0,  7.0], [3.0,  5.0], [13.0, 5.0], [13.0, 5.5]],
-      "T4":      [[5.5,  5.5], [5.5,  6.0], [12.0, 6.0], [12.0, 5.5]]
-    },
-
-    "hops": {
-      "T2": [[8.5, 4.0]],
-      "T3": [[8.5, 5.0], [10.5, 5.0]],
-      "T4": [[8.5, 6.0], [10.5, 6.0]]
-    },
-
-    "symbol_pos": {
-      "CB-A1":   [1.5,  7.75], "CB-A2":   [3.0,  7.75],
-      "CB-B1":   [5.5,  7.75],
-      "CB-X1":   [9.5,  7.75], "CB-X2":   [12.0, 7.75],
-      "S-X1-AB": [8.5,  6.25], "S-X1-BC": [8.5,  4.75],
-      "S-X1-AD": [10.5, 6.25], "S-X1-DE": [10.5, 4.75],
-      "S-X1-EF": [10.5, 3.25], "R-X1":    [8.5,  3.25],
-      "S-X2-AB": [12.0, 6.25],
-      "T1":      [5.0,  4.0],
-      "T2":      [7.0,  5.5],
-      "T3":      [8.0,  5.0],
-      "T4":      [8.75, 6.0]
-    }
-  }
+  "feeder_peak_target": {"X1": 360.0, "X2": 250.0, "A1": 230.0, "A2": 150.0, "B1": 300.0},
+  "solver_params": {"action_cost_remote": 1.0, "action_cost_manual": 5.0, "ring_relocate_penalty": 2.0, "restore_weight": 100.0}
 }
