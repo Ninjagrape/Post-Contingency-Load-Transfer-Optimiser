@@ -37,6 +37,7 @@ PORT_SPREAD = 0.55    # how far across a side fanned ports spread (fraction of 2
 LANE_GAP    = 1.2     # vertical gap between tie lanes
 LANE_TOP_PAD= 2.0     # gap between lowest node and the first tie lane
 HOP_EPS     = 1e-6
+CORRIDOR_SPREAD = 0.9   # horizontal spread of overlapping tie drop corridors
 
 _PALETTE = ["#1a78c2", "#27ae60", "#9b59b6", "#e67e22", "#16a085",
             "#c0a020", "#2e9bd6", "#d65f9a", "#e8743b", "#5d6d7e"]
@@ -231,14 +232,40 @@ def auto_layout(nodes, edges, feeders, outage_substation, base_diagram=None):
         ed = edges[eid]
         return abs(pos[ed["u"]][0] - pos[ed["v"]][0])
     loop_ids.sort(key=_span)
+
+    # Corridor offsets: when several loop edges drop from endpoints sharing
+    # (nearly) the same x, their vertical runs would overlap.  Group every
+    # loop endpoint by rounded x and fan the drop corridors out around that x
+    # so each tie owns a distinct vertical lane down to its horizontal lane.
+    def _endpoint_x(eid, node):
+        return port[(eid, node)][0]
+
+    corridor = {}                          # (eid, node) -> drop_x
+    groups = {}                            # rounded_x -> list of (eid, node)
+    for eid in loop_ids:
+        ed = edges[eid]
+        for node in (ed["u"], ed["v"]):
+            key = round(_endpoint_x(eid, node) / (NODE_R * 1.5))
+            groups.setdefault(key, []).append((eid, node))
+    for key, members in groups.items():
+        # stable order so the offset assignment is deterministic
+        members.sort(key=lambda en: (en[0], en[1]))
+        m = len(members)
+        for i, (eid, node) in enumerate(members):
+            t = 0.0 if m == 1 else (i / (m - 1) - 0.5)   # -0.5..0.5
+            corridor[(eid, node)] = _endpoint_x(eid, node) + t * CORRIDOR_SPREAD
+
     lane_y = {}
     for i, eid in enumerate(loop_ids):
         lane_y[eid] = deepest_tie_y - LANE_TOP_PAD - i * LANE_GAP
         ed = edges[eid]
         pu = port[(eid, ed["u"])]
         pv = port[(eid, ed["v"])]
+        dux = corridor[(eid, ed["u"])]
+        dvx = corridor[(eid, ed["v"])]
         ly = lane_y[eid]
-        routes[eid] = [pu, (pu[0], ly), (pv[0], ly), pv]
+        # port -> short jog to corridor x -> drop -> lane -> drop -> jog -> port
+        routes[eid] = [pu, (dux, pu[1]), (dux, ly), (dvx, ly), (dvx, pv[1]), pv]
 
     # --- hops: where a loop lane's horizontal run crosses a vertical wire ---
     hops = {}
@@ -263,6 +290,15 @@ def auto_layout(nodes, edges, feeders, outage_substation, base_diagram=None):
                     hop_pts.append(c)
         if hop_pts:
             hops[eid] = hop_pts
+
+    # --- tee points: nodes where the radial feeder branches (3+ tree edges) --
+    tee_pos = {}
+    for n in nodes:
+        if nodes[n]["kind"] == "bus":
+            continue
+        tree_deg = sum(1 for (eid, _o, il) in incident[n] if not il)
+        if tree_deg >= 3:
+            tee_pos[n] = (float(pos[n][0]), float(pos[n][1]))
 
     # --- symbol_pos: midpoint of each switchable edge's route ---------------
     symbol_pos = {}
@@ -307,6 +343,8 @@ def auto_layout(nodes, edges, feeders, outage_substation, base_diagram=None):
     for i, fn in enumerate(sorted(outage_feeders)):
         fcolors.setdefault(fn, _OUTAGE_PALETTE[i % len(_OUTAGE_PALETTE)])
 
+    tee_pos = {n: shift(*p) for n, p in tee_pos.items()}
+    
     return dict(pos=pos, routes=routes, hops=hops, symbol_pos=symbol_pos,
-                feeder_colors=fcolors, figsize=list(figsize),
+                tee_pos=tee_pos, feeder_colors=fcolors, figsize=list(figsize),
                 xlim=list(xlim), ylim=list(ylim))

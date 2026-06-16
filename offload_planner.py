@@ -594,6 +594,16 @@ def draw_network(sol=None, block_amps=None, diagram=None):
                 ax.text(px + 0.42, py + 0.25, f"{block_amps[nid]:.0f} A",
                         fontsize=6.5, color="#f0c040",
                         ha="left", va="bottom", zorder=9)
+                
+    # ── Draw tee junction dots ────────────────────────────────────────────────
+    for nid, (tx, ty) in diagram.get("tee_pos", {}).items():
+        feeder = NODES[nid].get("feeder")
+        energized = bool(ystate.get(nid, 1))
+        dot_color = FEEDER_COLORS.get(feeder, "#aaaaaa") if energized else "#556"
+        ax.add_patch(plt.Circle(
+            (tx, ty), 0.11, facecolor=dot_color, edgecolor="white",
+            lw=1.2, zorder=10,
+        ))
 
     # ── Legend ────────────────────────────────────────────────────────────────
     leg_items = [
