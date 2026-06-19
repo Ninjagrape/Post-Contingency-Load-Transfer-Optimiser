@@ -20,10 +20,20 @@ This tool automates that process:
 ## Usage
 
 ```bash
-python offload_planner.py [season] [scenario]
+python -m planner.offload_planner [season] [scenario]
 ```
 
 Both arguments are optional. `season` defaults to `MAX`; `scenario` defaults to `baseline`. Valid seasons: `winter`, `spring`, `summer`, `fall`, `MAX`. Scenarios are JSON files in the `scenarios/` directory.
+
+## Repository layout
+
+```
+planner/    feeder restoration optimiser (offload_planner.py, auto_layout.py)
+recon/      reconfiguration detection / channel correction (recon_correct.py,
+            generate_channel_data.py, score.py)
+scenarios/  shared network definitions (baseline / cbd / metro .json)
+data/       committed channel-data fixtures (generated, scored against)
+```
 
 ### Example output
 
@@ -159,11 +169,11 @@ The solver (CBC, bundled with PuLP) finds the globally optimal switch configurat
 Running the script automatically opens an ADMS-style one-line diagram of the post-switching state. The diagram's geometry (node positions, cable routing, switch-symbol placement, flyover hops) is computed from the topology by `auto_layout`, so scenario files carry no coordinates. You can also build a diagram and call `draw_network()` directly:
 
 ```python
-from offload_planner import (load_scenario, draw_network, solve_offload,
+from planner.offload_planner import (load_scenario, draw_network, solve_offload,
                               build_plan, allocate_block_loads, synthesize_year,
                               seasonal_max, FEEDERS, FEEDER_PEAK_TARGET,
                               OUTAGE_SUBSTATION, NODES, EDGES)
-from auto_layout import auto_layout
+from planner.auto_layout import auto_layout
 
 sc = load_scenario("baseline")   # populates FEEDERS, OUTAGE_SUBSTATION, etc.
 
@@ -206,10 +216,50 @@ The diagram uses a dark canvas with orthogonal routing and feeder color-coding:
 
 Requires `matplotlib` (optional; solver and plan output work without it).
 
+## Reconfiguration detection (channel correction)
+
+The `recon/` package recovers each metered channel's *native* seasonal / annual MAX from a contaminated timeseries. A CB or RTU reading is not a feeder's intrinsic load: when a neighbouring outage forces a temporary switching change, load is transferred between tie-connected feeders, so the donor channel reads low and the receiver reads high for the duration. A naive MAX over the raw series therefore inflates the receiver's peak and can miss the donor's true peak.
+
+With no historical switch log available, `recon_correct.py` reconstructs the native readings from topology plus the channel series alone, using one invariant: a reconfiguration is a **conserved, opposite, window-significant** transfer between feeders that are tie-connected in the topology. The detection test is on each feeder's *window-mean* significance and conserved magnitude — not pointwise correlation, since a sustained transfer shifts the means oppositely but does not make the hourly noise mirror. A genuine load change (a heatwave, a new large customer) appears on one channel with no compensating partner, so it survives correction untouched; a revert test additionally protects permanent step changes.
+
+Public entry:
+
+```python
+from recon.recon_correct import Topology, correct_channels
+topo   = Topology.from_scenario(scenario_dict)   # reads CBs + RTU-bearing switches
+result = correct_channels(channel_df, topo)
+result.native_max     # {channel: corrected MAX amps}
+result.seasonal_max   # {channel: {season: corrected max}}
+result.raw_max        # {channel: raw MAX}  (for comparison)
+result.events         # DataFrame, one row per confirmed transfer
+```
+
+It also runs as a CLI:
+
+```bash
+python recon/recon_correct.py data/channels_long.csv scenarios/metro.json --report
+```
+
+### Test loop
+
+`generate_channel_data.py` synthesizes two years of hourly readings for the `metro` scenario's channels with four known transfers and one permanent-step decoy, writing `data/channels_long.csv` (module input), `data/channels_wide.csv` (human view), and `data/ground_truth.json`. `score.py` checks recovery against that truth:
+
+```bash
+python recon/generate_channel_data.py   # writes the three files into data/
+python recon/score.py                    # recovery vs ground truth
+```
+
+Baseline on the committed fixtures: recovers the MAX that matters (CB-X1, 535 → 466 A, matching truth), catches 3 of 4 injected events (the missed one is a winter event that could never be the annual peak), with one small harmless false positive.
+
+**Tuning for real telemetry:** `z_thresh` and `match_tol` should be calibrated against your actual CB noise level (inject known transfers and check recovery, as `score.py` does). The multi-tie case where load fans out across several neighbours at once would replace the single-partner loop with a constrained regression of the donor's deficit onto all tie-neighbours' residuals; the current structure leaves room for that extension.
+
+Requires `numpy` and `pandas` (and `networkx`, already a planner dependency).
+
 ## Dependencies
 
 ```
 numpy
+pandas       # for recon/ channel correction
 networkx
 pulp
 matplotlib   # optional, for draw_network()
@@ -218,7 +268,7 @@ matplotlib   # optional, for draw_network()
 Install with:
 
 ```bash
-pip install numpy networkx pulp matplotlib
+pip install numpy pandas networkx pulp matplotlib
 ```
 
 PuLP ships with the CBC solver; no external solver installation is required.
