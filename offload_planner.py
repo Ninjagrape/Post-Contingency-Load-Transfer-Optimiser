@@ -420,7 +420,7 @@ def explain_single_tie_rejections(block_amps):
 # ===========================================================================
 # 6. NETWORK DIAGRAM (ADMS-STYLE ONE-LINE VIEW)
 # ===========================================================================
-def draw_network(sol=None, block_amps=None, diagram=None):
+def draw_network(sol=None, block_amps=None, diagram=None, show=True, ax=None):
     """ADMS-style one-line diagram with orthogonal routing.
 
     sol        : result from solve_offload(); None shows the initial outage state.
@@ -428,6 +428,10 @@ def draw_network(sol=None, block_amps=None, diagram=None):
     diagram    : diagram sub-dict (pos, routes, hops, symbol_pos, feeder_colors).
                  Generate it with auto_layout() when a scenario has none.  If
                  None the diagram is skipped.
+    show       : call plt.show() before returning.  Pass False to draw several
+                 figures (e.g. pre- and post-switching) and show them together.
+    ax         : draw onto this existing Axes instead of making a new figure.
+                 Used by the comparison viewer to redraw both states in place.
 
     Tie and ring switches are drawn dashed.  Where a dashed tie line must cross
     a feeder segment it does not connect to, a semicircle flyover (hop) is drawn.
@@ -474,7 +478,11 @@ def draw_network(sol=None, block_amps=None, diagram=None):
     _fs   = tuple(diagram.get("figsize", (18, 10)))
     _xlim = diagram.get("xlim", (-0.5, 14.5))
     _ylim = diagram.get("ylim", (1.2, 9.5))
-    fig, ax = plt.subplots(figsize=_fs)
+    created = ax is None
+    if created:
+        fig, ax = plt.subplots(figsize=_fs)
+    else:
+        fig = ax.figure
     ax.set_xlim(*_xlim)
     ax.set_ylim(*_ylim)
     ax.set_aspect("equal")
@@ -641,9 +649,49 @@ def draw_network(sol=None, block_amps=None, diagram=None):
         f"Substation Outage Offload Planner v2  ·  {mode}",
         fontsize=13, fontweight="bold", color="white", pad=14,
     )
-    plt.tight_layout()
-    plt.show()
+    if created:
+        plt.tight_layout()
+    if show:
+        plt.show()
     return fig, ax
+
+
+def compare_states(sol, block_amps, diagram):
+    """Single-window before/after viewer.
+
+    Draws the pre-switching (initial outage) and post-switching states on the
+    same axes and toggles between them with the keyboard arrow keys, so the
+    geometry stays fixed and only the energisation / switch states change -
+    making differences easy to spot by flipping back and forth.
+    """
+    import matplotlib.pyplot as plt
+
+    states = [(None, "Initial outage state"),
+              (sol,  "Post-switching state")]
+    cur = {"i": 0}
+
+    _fs = tuple(diagram.get("figsize", (18, 10)))
+    fig, ax = plt.subplots(figsize=_fs)
+
+    def render():
+        ax.clear()
+        draw_network(sol=states[cur["i"]][0], block_amps=block_amps,
+                     diagram=diagram, show=False, ax=ax)
+        ax.set_title(
+            f"Substation Outage Offload Planner v2  ·  {states[cur['i']][1]}"
+            f"   ( ← / → to switch view  ·  {cur['i'] + 1}/{len(states)} )",
+            fontsize=13, fontweight="bold", color="white", pad=14,
+        )
+        fig.canvas.draw_idle()
+
+    def on_key(event):
+        if event.key in ("right", "down", "left", "up", " ", "tab"):
+            cur["i"] = (cur["i"] + 1) % len(states)
+            render()
+
+    fig.canvas.mpl_connect("key_press_event", on_key)
+    render()
+    plt.show()
 
 
 # ===========================================================================
@@ -739,7 +787,11 @@ def main(season="MAX", scenario="baseline"):
                               base_diagram=diagram)
 
     try:
-        draw_network(sol=sol, block_amps=block_amps, diagram=diagram)
+        # One window, two views.  The pre-switching state (sol=None: outage
+        # blocks de-energised, switches normal) and the post-switching state
+        # (the applied plan) are drawn on the SAME axes; press the Left/Right
+        # (or Up/Down) arrow keys to flip between them for an A/B comparison.
+        compare_states(sol, block_amps, diagram)
     except ImportError:
         print("\n(Install matplotlib to view the network diagram: pip install matplotlib)")
 

@@ -36,8 +36,9 @@ NODE_R      = 0.34    # node radius (matches draw_network)
 PORT_SPREAD = 0.55    # how far across a side fanned ports spread (fraction of 2R)
 LANE_GAP    = 1.2     # vertical gap between tie lanes
 LANE_TOP_PAD= 2.0     # gap between lowest node and the first tie lane
+CORRIDOR_CLEAR = NODE_R * 0.9   # min x-gap before a tie drop counts as overlapping
+CORRIDOR_STEP  = NODE_R * 1.5   # sideways nudge when a tie drop must dodge a wire
 HOP_EPS     = 1e-6
-CORRIDOR_SPREAD = 0.9   # horizontal spread of overlapping tie drop corridors
 
 _PALETTE = ["#1a78c2", "#27ae60", "#9b59b6", "#e67e22", "#16a085",
             "#c0a020", "#2e9bd6", "#d65f9a", "#e8743b", "#5d6d7e"]
@@ -109,7 +110,7 @@ def _fan_ports(node, incident, side, pos):
     cx, cy = pos[node]
     by_side = {}
     for eid, other, is_loop in incident:
-        by_side.setdefault(side[eid], []).append((eid, other))
+        by_side.setdefault(side[(eid, node)], []).append((eid, other))
     port = {}
     for s, items in by_side.items():
         # order items along the side so wires don't cross at the node
@@ -133,9 +134,14 @@ def _fan_ports(node, incident, side, pos):
 
 
 def _ortho(p0, p1):
-    """Two-segment Manhattan route between two ports (vertical then horizontal,
+    """Two-segment Manhattan route between two ports (horizontal then vertical,
     via an elbow).  Near-aligned ports snap to a single straight run so a
-    stacked tree edge doesn't kink."""
+    stacked tree edge doesn't kink.
+
+    When p0 is above p1 (the normal parent→child case): jog horizontally to
+    p1's x first, then drop straight down.  This puts the vertical segment at
+    the *child's* x so the wire arrives at the child's centre-top rather than
+    approaching diagonally from the parent's position."""
     (x0, y0), (x1, y1) = p0, p1
     SNAP = 2 * NODE_R * PORT_SPREAD + HOP_EPS   # within a port-fan's spread
     if abs(x0 - x1) < SNAP:
@@ -145,8 +151,10 @@ def _ortho(p0, p1):
         ym = (y0 + y1) / 2.0
         return [(x0, ym), (x1, ym)]
     if y0 > y1:
-        return [(x0, y0), (x0, y1), (x1, y1)]
-    return [(x0, y0), (x1, y0), (x1, y1)]
+        # p0 is higher (closer to bus): jog to child x, then drop straight down
+        return [(x0, y0), (x1, y0), (x1, y1)]
+    # p0 is lower: drop first, then jog (reversed/upward route)
+    return [(x0, y0), (x0, y1), (x1, y1)]
 
 
 def _seg_crosses(ax0, ay0, ax1, ay1, bx0, by0, bx1, by1):
@@ -207,9 +215,10 @@ def auto_layout(nodes, edges, feeders, outage_substation, base_diagram=None):
         incident[ed["v"]].append((eid, ed["u"], il))
 
     # --- assign ports -------------------------------------------------------
-    side = {}
+    side = {}                            # (edge_id, node) -> side
     for n in nodes:
-        side.update(_classify_ports(n, incident[n], pos, depth))
+        for eid, s in _classify_ports(n, incident[n], pos, depth).items():
+            side[(eid, n)] = s
     port = {}                            # (edge_id, node) -> (x, y)
     for n in nodes:
         pp = _fan_ports(n, incident[n], side, pos)
@@ -238,42 +247,66 @@ def auto_layout(nodes, edges, feeders, outage_substation, base_diagram=None):
         return abs(pos[ed["u"]][0] - pos[ed["v"]][0])
     loop_ids.sort(key=_span)
 
-    # Corridor offsets: when several loop edges drop from endpoints sharing
-    # (nearly) the same x, their vertical runs would overlap.  Group every
-    # loop endpoint by rounded x and fan the drop corridors out around that x
-    # so each tie owns a distinct vertical lane down to its horizontal lane.
-    def _endpoint_x(eid, node):
-        return port[(eid, node)][0]
-
-    corridor = {}                          # (eid, node) -> drop_x
-    groups = {}                            # rounded_x -> list of (eid, node)
-    for eid in loop_ids:
-        ed = edges[eid]
-        for node in (ed["u"], ed["v"]):
-            key = round(_endpoint_x(eid, node) / (NODE_R * 1.5))
-            groups.setdefault(key, []).append((eid, node))
-    
-    for key, members in groups.items():
-        members.sort(key=lambda en: (en[0], en[1]))
-        m = len(members)
-        for i, (eid, node) in enumerate(members):
-            if m == 1:
-                corridor[(eid, node)] = pos[node][0]   # center: square corner
-                continue
-            t = i / (m - 1) - 0.5
-            corridor[(eid, node)] = pos[node][0] + t * CORRIDOR_SPREAD
-
+    # Corridor x for each loop-edge endpoint = the x of its vertical drop down
+    # to the tie lane.  We *want* this to sit on the node's centre (clean
+    # centre-bottom exit, ADMS house style), but a centred drop collinearly
+    # overlaps any wire that already runs in that column: the feeder segment
+    # continuing below the node (e.g. T2 off X1-E running down through S-X1-EF),
+    # or another tie dropping down the same stacked column (T2 and T4 both down
+    # the B1-a/B1-b column).  So we resolve collisions: start at centre and, if
+    # the drop would overlap an existing vertical (feeder route or an
+    # already-placed tie drop) along a shared x, nudge it sideways - preferring
+    # the side its port is on so the short jog doesn't cut back across the node.
     lane_y = {}
     for i, eid in enumerate(loop_ids):
         lane_y[eid] = deepest_tie_y - LANE_TOP_PAD - i * LANE_GAP
+
+    # Obstacle verticals = every vertical segment of the radial (tree) routes,
+    # which are the only routes built so far.
+    obstacles = []                         # (x, ylo, yhi)
+    for pts in routes.values():
+        for i in range(len(pts) - 1):
+            (x0, y0), (x1, y1) = pts[i], pts[i + 1]
+            if abs(x0 - x1) < HOP_EPS and abs(y0 - y1) > HOP_EPS:
+                obstacles.append((x0, min(y0, y1), max(y0, y1)))
+
+    placed = []                            # tie drop verticals already routed
+    def _clear(x, ylo, yhi):
+        for ox, oy0, oy1 in obstacles:
+            if abs(ox - x) < CORRIDOR_CLEAR and min(yhi, oy1) - max(ylo, oy0) > HOP_EPS:
+                return False
+        for ox, oy0, oy1 in placed:
+            if abs(ox - x) < CORRIDOR_CLEAR and min(yhi, oy1) - max(ylo, oy0) > HOP_EPS:
+                return False
+        return True
+
+    def _corridor_x(center, ylo, yhi, prefer):
+        if _clear(center, ylo, yhi):
+            return center
+        for k in range(1, 80):
+            for s in (prefer, -prefer):
+                x = center + s * k * CORRIDOR_STEP
+                if _clear(x, ylo, yhi):
+                    return x
+        return center                      # give up: better than an exception
+
+    corridor = {}                          # (eid, node) -> drop_x
+    for eid in loop_ids:
         ed = edges[eid]
+        ly = lane_y[eid]
         pu = port[(eid, ed["u"])]
         pv = port[(eid, ed["v"])]
+        uy, vy = pos[ed["u"]][1], pos[ed["v"]][1]
+        for node, pp, ny in ((ed["u"], pu, uy), (ed["v"], pv, vy)):
+            cx = pos[node][0]
+            prefer = 1 if pp[0] >= cx else -1
+            ylo, yhi = min(ly, ny), max(ly, ny)
+            dx = _corridor_x(cx, ylo, yhi, prefer)
+            corridor[(eid, node)] = dx
+            placed.append((dx, ylo, yhi))
         dux = corridor[(eid, ed["u"])]
         dvx = corridor[(eid, ed["v"])]
-        ly = lane_y[eid]
         # port -> short jog to corridor x -> drop -> lane -> drop -> jog -> port
-        uy, vy = pos[ed["u"]][1], pos[ed["v"]][1]
         routes[eid] = [pu, (pu[0], uy), (dux, uy), (dux, ly),
                        (dvx, ly), (dvx, vy), (pv[0], vy), pv]
 
@@ -301,14 +334,14 @@ def auto_layout(nodes, edges, feeders, outage_substation, base_diagram=None):
         if hop_pts:
             hops[eid] = hop_pts
 
-    # --- tee points: nodes where the radial feeder branches (3+ tree edges) --
+    # --- tee points: junction dots where a feeder branches mid-wire ----------
+    # A branch at a *node* (e.g. X1-A feeding both X1-B and X1-D) needs no dot:
+    # the node circle already shows the connection, and a dot at the node centre
+    # just stacks on top of it.  With port-fan routing every branch emanates from
+    # its node, so no off-node junctions arise here and tee_pos stays empty.  The
+    # key is kept so draw_network can still render genuine mid-wire tees if a
+    # future layout produces them.
     tee_pos = {}
-    for n in nodes:
-        if nodes[n]["kind"] == "bus":
-            continue
-        tree_deg = sum(1 for (eid, _o, il) in incident[n] if not il)
-        if tree_deg >= 3:
-            tee_pos[n] = (float(pos[n][0]), float(pos[n][1]))
 
     # --- symbol_pos: midpoint of each switchable edge's route ---------------
     def _polyline_midpoint(pts):
